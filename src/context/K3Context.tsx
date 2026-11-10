@@ -14,6 +14,7 @@ import {
 } from '../services/auth';
 import {
   uploadFileToGoogleDriveFolder,
+  uploadFileViaWebhook,
   deleteFileFromGoogleDrive,
 } from '../services/gdriveService';
 
@@ -210,10 +211,17 @@ export const K3Provider: React.FC<{ children: React.ReactNode }> = ({ children }
       return false;
     } catch (err: any) {
       console.error('Login error:', err);
-      showToast(
-        'error',
-        `Gagal menghubungkan Google: ${err.message || 'Pop-up ditutup sebelum selesai.'}`
-      );
+      if (err?.code === 'auth/unauthorized-domain' || err?.message?.includes('auth/unauthorized-domain')) {
+        showToast(
+          'error',
+          'Domain Vercel belum diizinkan di Firebase: Tambahkan domain Vercel Anda di Firebase Console > Authentication > Settings > Authorized domains.'
+        );
+      } else {
+        showToast(
+          'error',
+          `Gagal menghubungkan Google: ${err.message || 'Pop-up ditutup sebelum selesai.'}`
+        );
+      }
       return false;
     } finally {
       setIsLoggingIn(false);
@@ -335,24 +343,37 @@ export const K3Provider: React.FC<{ children: React.ReactNode }> = ({ children }
       let isGDrive = false;
       let gdriveUrl = '';
 
-      // Direct Upload to Google Drive folder via Google Drive API if authenticated
-      if (token) {
-        try {
-          const gdriveResult = await uploadFileToGoogleDriveFolder(
-            file,
-            file.name,
-            GDRIVE_FOLDER_ID,
-            token,
-            customDocNumber
-          );
-          if (gdriveResult?.webViewLink) {
-            isGDrive = true;
-            gdriveUrl = gdriveResult.webViewLink;
-            anyGDriveSuccess = true;
+      // Direct Automatic Upload to Google Drive folder K3 RS via Webhook (Zero login required for all hospital staff)
+      try {
+        const webhookResult = await uploadFileViaWebhook(file, file.name, customDocNumber);
+        if (webhookResult?.webViewLink) {
+          isGDrive = true;
+          gdriveUrl = webhookResult.webViewLink;
+          anyGDriveSuccess = true;
+        }
+      } catch (webhookErr: any) {
+        console.warn('Webhook upload fallback:', webhookErr);
+        // Fallback to token-based upload if available
+        if (token) {
+          try {
+            const gdriveResult = await uploadFileToGoogleDriveFolder(
+              file,
+              file.name,
+              GDRIVE_FOLDER_ID,
+              token,
+              customDocNumber
+            );
+            if (gdriveResult?.webViewLink) {
+              isGDrive = true;
+              gdriveUrl = gdriveResult.webViewLink;
+              anyGDriveSuccess = true;
+            }
+          } catch (driveErr: any) {
+            console.error('Direct Google Drive upload error:', driveErr);
+            driveErrorMessage = driveErr.message || 'Gagal menyimpan ke Google Drive';
           }
-        } catch (driveErr: any) {
-          console.error('Direct Google Drive upload error:', driveErr);
-          driveErrorMessage = driveErr.message || 'Gagal menyimpan ke Google Drive';
+        } else {
+          driveErrorMessage = webhookErr.message;
         }
       }
 
@@ -452,25 +473,6 @@ export const K3Provider: React.FC<{ children: React.ReactNode }> = ({ children }
     const doc = item?.documents.find(d => d.id === docId);
     if (!item || !doc) return false;
 
-    let token = await getAccessToken();
-    if (!token) {
-      try {
-        const signResult = await googleSignIn();
-        if (signResult) {
-          token = signResult.accessToken;
-          setCurrentUser(signResult.user);
-        }
-      } catch (authErr: any) {
-        showToast('error', 'Login Google diperlukan agar dapat mengunggah ke Google Drive.');
-        return false;
-      }
-    }
-
-    if (!token) {
-      showToast('error', 'Izin Google Drive tidak diperoleh. Silakan hubungkan akun Google.');
-      return false;
-    }
-
     try {
       const blob = await getFileBlob(docId);
       if (!blob) {
@@ -479,13 +481,29 @@ export const K3Provider: React.FC<{ children: React.ReactNode }> = ({ children }
       }
 
       showToast('info', `Sedang mengunggah ${doc.name} ke folder Google Drive Komite K3...`);
-      const gdriveResult = await uploadFileToGoogleDriveFolder(
-        blob,
-        doc.name,
-        GDRIVE_FOLDER_ID,
-        token,
-        doc.docNumber
-      );
+
+      let gdriveResult: any = null;
+      try {
+        gdriveResult = await uploadFileViaWebhook(blob, doc.name, doc.docNumber);
+      } catch (webhookErr) {
+        console.warn('Webhook sync fallback to token:', webhookErr);
+        let token = await getAccessToken();
+        if (!token) {
+          const signResult = await googleSignIn();
+          token = signResult?.accessToken || null;
+        }
+        if (token) {
+          gdriveResult = await uploadFileToGoogleDriveFolder(
+            blob,
+            doc.name,
+            GDRIVE_FOLDER_ID,
+            token,
+            doc.docNumber
+          );
+        } else {
+          throw webhookErr;
+        }
+      }
 
       setItems(prevItems =>
         prevItems.map(it => {

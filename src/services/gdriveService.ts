@@ -11,6 +11,62 @@ export interface GDriveUploadResult {
   parents?: string[];
 }
 
+export const GDRIVE_WEBHOOK_URL =
+  'https://script.google.com/macros/s/AKfycbywYDYcPUp3zKUqwAGEP4yJ0x7UXwVKEipbV41TYh8dNP3_7K0Awit92nMZMoFb38B7Yw/exec';
+
+/**
+ * Uploads file directly to Google Drive folder using Google Apps Script Webhook.
+ * Requires NO user login, NO OAuth verification, and works for all users.
+ */
+export async function uploadFileViaWebhook(
+  fileBlob: Blob | File,
+  fileName: string,
+  docNumber?: string
+): Promise<GDriveUploadResult> {
+  const arrayBuffer = await fileBlob.arrayBuffer();
+  const bytes = new Uint8Array(arrayBuffer);
+  let binary = '';
+  const len = bytes.byteLength;
+  for (let i = 0; i < len; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  const base64 = btoa(binary);
+
+  const payload = JSON.stringify({
+    fileName,
+    mimeType: fileBlob.type || 'application/octet-stream',
+    base64,
+    docNumber,
+  });
+
+  const response = await fetch(GDRIVE_WEBHOOK_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'text/plain;charset=utf-8',
+    },
+    body: payload,
+  });
+
+  const resText = await response.text();
+  let data: any;
+  try {
+    data = JSON.parse(resText);
+  } catch {
+    console.error('GAS response error:', resText);
+    throw new Error('Respon dari server Google Drive tidak valid.');
+  }
+
+  if (data.status !== 'success') {
+    throw new Error(data.message || 'Gagal menyimpan ke Google Drive.');
+  }
+
+  return {
+    id: data.fileId,
+    name: fileName,
+    webViewLink: data.url || `https://drive.google.com/file/d/${data.fileId}/view`,
+  };
+}
+
 export async function uploadFileToGoogleDriveFolder(
   fileBlob: Blob | File,
   fileName: string,

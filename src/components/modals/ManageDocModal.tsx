@@ -18,27 +18,6 @@ import {
 import { useK3, GDRIVE_MAIN_FOLDER_URL, GDRIVE_FOLDER_ID } from '../../context/K3Context';
 import { ComplianceStatus } from '../../types/k3';
 
-const GoogleGLogo: React.FC = () => (
-  <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24">
-    <path
-      fill="#4285F4"
-      d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.17z"
-    />
-    <path
-      fill="#34A853"
-      d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z"
-    />
-    <path
-      fill="#FBBC05"
-      d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.16 0 9.97 0 12s.45 3.84 1.25 5.42l4.03-3.15z"
-    />
-    <path
-      fill="#EA4335"
-      d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
-    />
-  </svg>
-);
-
 export const ManageDocModal: React.FC = () => {
   const {
     activeDocModalItem,
@@ -50,8 +29,6 @@ export const ManageDocModal: React.FC = () => {
     setViewingDocState,
     currentUser,
     isLoggedIn,
-    isLoggingIn,
-    handleGoogleLogin,
   } = useK3();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -218,41 +195,28 @@ export const ManageDocModal: React.FC = () => {
           ) : (
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl bg-blue-50/90 border border-blue-200 text-xs text-blue-950">
               <div className="flex items-center gap-2.5">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-white shadow-xs">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-600 text-white shadow-xs">
                   <FolderOpen className="h-4 w-4" />
                 </div>
                 <div>
-                  <span className="font-bold text-blue-950 block">
-                    Penyimpanan Otomatis ke Google Drive K3RS
+                  <span className="font-bold text-emerald-950 block text-xs sm:text-sm">
+                    Penyimpanan Otomatis ke Google Drive K3RS Aktif
                   </span>
-                  <span className="text-[11px] text-blue-700">
-                    Masuk dengan Google agar file yang diunggah langsung tersimpan ke folder Google Drive resmi RS Semen Gresik
+                  <span className="text-[11px] text-emerald-700">
+                    Semua berkas yang diunggah otomatis tersimpan ke folder Google Drive resmi Komite K3 RS Semen Gresik
                   </span>
                 </div>
               </div>
 
               <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
-                <button
-                  type="button"
-                  onClick={() => handleGoogleLogin()}
-                  disabled={isLoggingIn}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-blue-300 text-slate-800 font-semibold text-xs hover:bg-blue-100/70 transition-colors shadow-2xs"
-                >
-                  {isLoggingIn ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin text-teal-600" />
-                  ) : (
-                    <GoogleGLogo />
-                  )}
-                  <span>{isLoggingIn ? 'Menghubungkan...' : 'Masuk Google'}</span>
-                </button>
-
                 <a
                   href={GDRIVE_MAIN_FOLDER_URL}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-blue-600 text-white font-semibold text-xs hover:bg-blue-700 transition-colors shadow-2xs"
-                  title="Buka Folder Drive"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 text-white font-semibold text-xs hover:bg-emerald-700 transition-colors shadow-2xs"
+                  title="Buka Folder Google Drive Komite K3"
                 >
+                  <span>Buka Folder Drive</span>
                   <ExternalLink className="h-3.5 w-3.5" />
                 </a>
               </div>
