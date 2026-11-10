@@ -1,0 +1,116 @@
+import { MenuItem } from '../types/k3';
+
+/**
+ * STRUKTUR MENU UTAMA DASHBOARD (WAJIB PATEN)
+ * RS SEMEN GRESIK - KOMITE K3RS
+ * Urutan, nama, dan url PERSIS sesuai ketentuan resmi.
+ */
+export const OFFICIAL_SIDEBAR_MENUS: MenuItem[] = [
+  {
+    id: 'RINGKASAN',
+    name: 'Ringkasan',
+    path: '/',
+    externalUrl: 'https://komite-k3.vercel.app/',
+    checklistMapping: 'Statistik seluruh persyaratan dan dokumen',
+    description: 'Halaman utama dashboard yang menampilkan ringkasan kelengkapan dokumen K3RS.',
+    iconName: 'LayoutDashboard',
+  },
+  {
+    id: 'K3-KESELAMATAN',
+    name: 'Keselamatan & Keamanan Kerja',
+    path: '/modul/K3-KESELAMATAN',
+    checklistMapping: 'Persyaratan nomor 3 dan 4',
+    description: 'Pengendalian bahaya keselamatan lingkungan fisik dan pengamanan fasilitas rumah sakit.',
+    iconName: 'ShieldAlert',
+  },
+  {
+    id: 'K3-B3',
+    name: 'Pengelolaan B3',
+    path: '/modul/K3-B3',
+    checklistMapping: 'Persyaratan nomor 5',
+    description: 'Pengelolaan Bahan Berbahaya dan Beracun (B3) serta limbah B3 fasilitas medis.',
+    iconName: 'Biohazard',
+  },
+  {
+    id: 'K3-KEBAKARAN',
+    name: 'Pencegahan & Pengendalian Kebakaran',
+    path: '/modul/K3-KEBAKARAN',
+    checklistMapping: 'Persyaratan nomor 6',
+    description: 'Proteksi kebakaran aktif, pasif, jalur evakuasi, dan kesiapsiagaan Code Red.',
+    iconName: 'Flame',
+  },
+  {
+    id: 'K3-UTILITAS',
+    name: 'Pengelolaan Sarana & Utilitas',
+    path: '/modul/K3-UTILITAS',
+    checklistMapping: 'Persyaratan nomor 8 dan 10',
+    description: 'Pemeliharaan sistem utilitas vital (listrik, air, gas medik, tata udara) dan pengujian berkala.',
+    iconName: 'Wrench',
+  },
+  {
+    id: 'K3-ALKES',
+    name: 'Pengelolaan Peralatan Medis',
+    path: '/modul/K3-ALKES',
+    checklistMapping: 'Persyaratan nomor 7',
+    description: 'Kalibrasi, pemeliharaan preventif, sertifikasi kelaikan, dan prosedur recall alat kesehatan.',
+    iconName: 'Stethoscope',
+  },
+  {
+    id: 'K3-BENCANA',
+    name: 'Penanggulangan Bencana',
+    path: '/modul/K3-BENCANA',
+    checklistMapping: 'Master checklist resmi yang akan diberikan',
+    description: 'Hospital Disaster Plan, Hazard Vulnerability Assessment (HVA), dan tanggap darurat bencana.',
+    iconName: 'AlertTriangle',
+  },
+  {
+    id: 'K3-KESEHATAN-KERJA',
+    name: 'Kesehatan Kerja',
+    path: '/modul/K3-KESEHATAN-KERJA',
+    checklistMapping: 'Persyaratan KK.1 sampai KK.6',
+    description: 'Pemeriksaan kesehatan, imunisasi nakes, pajanan jarum suntik, ergonomi, dan pelaporan PAK.',
+    iconName: 'HeartPulse',
+  },
+  {
+    id: 'K3-DIKLAT',
+    name: 'Diklat',
+    path: '/modul/K3-DIKLAT',
+    checklistMapping: 'Persyaratan nomor 11.1 sampai 11.9',
+    description: 'Pelatihan keselamatan kerja, sertifikasi AK3U, fire drill, dan edukasi staf rumah sakit.',
+    iconName: 'GraduationCap',
+  },
+  {
+    id: 'K3-KEPEMIMPINAN',
+    name: 'Kepemimpinan & Perencanaan',
+    path: '/modul/K3-KEPEMIMPINAN',
+    checklistMapping: 'Persyaratan nomor 1 dan 2',
+    description: 'Kebijakan direksi, SK komite K3RS, program kerja tahunan, dan komitmen keselamatan.',
+    iconName: 'Users2',
+  },
+  {
+    id: 'K3-DOKUMEN',
+    name: 'Dokumen K3',
+    path: '/modul/K3-DOKUMEN',
+    checklistMapping: 'Persyaratan D.1 sampai D.3',
+    description: 'Pedoman resmi, Standar Prosedur Operasional (SPO), dan formulir bukti implementasi K3RS.',
+    iconName: 'FileText',
+  },
+  {
+    id: 'K3-LAPORAN',
+    name: 'Laporan K3',
+    path: '/modul/K3-LAPORAN',
+    checklistMapping: 'Persyaratan L.1',
+    description: 'Pelaporan kecelakaan kerja, laporan triwulanan direksi, dan laporan semester dinas.',
+    iconName: 'BarChart3',
+  },
+  {
+    id: 'K3-RISK-REGISTER',
+    name: 'Risk Register / IBR',
+    path: 'https://sites.google.com/view/manrisk-cng/unit-kerja',
+    isExternal: true,
+    externalUrl: 'https://sites.google.com/view/manrisk-cng/unit-kerja',
+    checklistMapping: 'Tautan eksternal Google Sites',
+    description: 'Identifikasi Bahaya dan Penilaian Risiko (IBR) unit kerja di Google Sites.',
+    iconName: 'ExternalLink',
+  },
+];
