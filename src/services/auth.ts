@@ -8,6 +8,7 @@ import {
   signInWithPopup,
   GoogleAuthProvider,
   onAuthStateChanged,
+  signInAnonymously,
   User,
   signOut,
 } from 'firebase/auth';
@@ -22,7 +23,7 @@ const firebaseConfig = {
   messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || defaultFirebaseConfig.messagingSenderId,
 };
 
-const app = initializeApp(firebaseConfig);
+export const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 
 export const SCOPES = [
@@ -41,6 +42,23 @@ export const clearAccessToken = () => {
 
 let isSigningIn = false;
 let cachedAccessToken: string | null = null;
+let anonymousSignInPromise: Promise<User> | null = null;
+
+export const ensureFirebaseUser = async (): Promise<User> => {
+  if (auth.currentUser) {
+    return auth.currentUser;
+  }
+
+  if (!anonymousSignInPromise) {
+    anonymousSignInPromise = signInAnonymously(auth)
+      .then(({ user }) => user)
+      .finally(() => {
+        anonymousSignInPromise = null;
+      });
+  }
+
+  return anonymousSignInPromise;
+};
 
 export const initAuth = (
   onAuthSuccess?: (user: User, token: string) => void,
