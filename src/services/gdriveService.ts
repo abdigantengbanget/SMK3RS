@@ -11,6 +11,15 @@ export interface GDriveUploadResult {
   parents?: string[];
 }
 
+export interface GDriveFileMetadata {
+  id: string;
+  name: string;
+  createdTime: string;
+  webViewLink?: string;
+  description?: string;
+  mimeType?: string;
+}
+
 export const GDRIVE_WEBHOOK_URL =
   'https://script.google.com/macros/s/AKfycbywYDYcPUp3zKUqwAGEP4yJ0x7UXwVKEipbV41TYh8dNP3_7K0Awit92nMZMoFb38B7Yw/exec';
 
@@ -65,6 +74,48 @@ export async function uploadFileViaWebhook(
     name: fileName,
     webViewLink: data.url || `https://drive.google.com/file/d/${data.fileId}/view`,
   };
+}
+
+export async function listFilesInGoogleDriveFolder(
+  folderId: string,
+  accessToken: string
+): Promise<GDriveFileMetadata[]> {
+  const files: GDriveFileMetadata[] = [];
+  let pageToken: string | undefined;
+
+  do {
+    const params = new URLSearchParams({
+      q: `'${folderId}' in parents and trashed = false`,
+      pageSize: '1000',
+      orderBy: 'createdTime desc',
+      includeItemsFromAllDrives: 'true',
+      supportsAllDrives: 'true',
+      fields: 'nextPageToken,files(id,name,createdTime,webViewLink,description,mimeType)',
+    });
+    if (pageToken) params.set('pageToken', pageToken);
+
+    const response = await fetch(
+      `https://www.googleapis.com/drive/v3/files?${params.toString()}`,
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    );
+    if (!response.ok) {
+      const errorText = await response.text();
+      let message = `Gagal membaca folder Google Drive (${response.status}).`;
+      try {
+        const parsed = JSON.parse(errorText);
+        if (parsed?.error?.message) message = parsed.error.message;
+      } catch {
+        // Keep the HTTP status message when Google returns a non-JSON response.
+      }
+      throw new Error(message);
+    }
+
+    const result = await response.json();
+    files.push(...(result.files || []));
+    pageToken = result.nextPageToken;
+  } while (pageToken);
+
+  return files;
 }
 
 export async function uploadFileToGoogleDriveFolder(

@@ -16,6 +16,8 @@ import {
   ChevronLeft,
   ChevronRight,
   X,
+  Cloud,
+  Loader2,
 } from 'lucide-react';
 import { useK3 } from '../context/K3Context';
 import { OFFICIAL_SIDEBAR_MENUS } from '../data/menuConfig';
@@ -47,6 +49,11 @@ export const Sidebar: React.FC = () => {
     setIsMobileSidebarOpen,
     moduleSummaries,
     stats,
+    isLoggedIn,
+    isLoggingIn,
+    driveSyncEnabled,
+    handleGoogleLogin,
+    setIsGDriveConfigModalOpen,
   } = useK3();
 
   const handleMenuClick = (menu: MenuItem, e: React.MouseEvent) => {
@@ -204,6 +211,39 @@ export const Sidebar: React.FC = () => {
 
         {/* Footer Collapse Toggle */}
         <div className="shrink-0 p-3.5 border-t border-slate-100 bg-white">
+          <button
+            type="button"
+            onClick={() =>
+              driveSyncEnabled
+                ? setIsGDriveConfigModalOpen(true)
+                : void handleGoogleLogin()
+            }
+            disabled={isLoggingIn}
+            className="mb-3 flex w-full items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-100 disabled:opacity-60"
+            title={
+              driveSyncEnabled
+                ? 'Sinkronisasi notifikasi Google Drive aktif'
+                : 'Hubungkan Google untuk menerima notifikasi upload'
+            }
+          >
+            {isLoggingIn ? (
+              <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+            ) : (
+              <Cloud className={`h-4 w-4 shrink-0 ${driveSyncEnabled ? 'text-emerald-600' : 'text-slate-500'}`} />
+            )}
+            {!isSidebarCollapsed && (
+              <span className="truncate">
+                {isLoggingIn
+                  ? 'Menghubungkan...'
+                  : driveSyncEnabled
+                    ? 'Notifikasi Drive Aktif'
+                    : isLoggedIn
+                      ? 'Aktifkan Notifikasi Drive'
+                      : 'Hubungkan Google Drive'}
+              </span>
+            )}
+          </button>
+
           <div className="flex items-center justify-between">
             {!isSidebarCollapsed ? (
               <div className="flex flex-col text-[11px] text-slate-400 leading-tight">

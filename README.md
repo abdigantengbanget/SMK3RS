@@ -19,16 +19,10 @@ View your app in AI Studio: https://ai.studio/apps/713a0233-04ce-42c8-964f-4b143
 3. Run the app:
    `npm run dev`
 
-## Real-time upload updates
+## Google Drive upload notifications
 
-Shared upload metadata and live notifications use Cloud Firestore. In the Firebase
-project configured for this app:
-
-1. Create a Firestore database.
-2. In Authentication > Sign-in method, enable **Anonymous** sign-in.
-3. Publish the rules from [`firestore.rules`](./firestore.rules) in Firestore
-   Database > Rules.
-
-Uploads made before this feature was enabled remain local to the browser. New
-Google Drive uploads and linked Drive documents are shared with other open app
-sessions. File contents stay in Google Drive; only document metadata is synced.
+The app checks the shared Google Drive folder for new files every 30 seconds.
+Each user who wants notifications must select **Hubungkan Google Drive** in the
+sidebar, approve the Drive metadata-read permission, and have access to the
+shared folder. Notifications appear only while the app is open. File contents
+remain in Google Drive; the app reads file metadata only.

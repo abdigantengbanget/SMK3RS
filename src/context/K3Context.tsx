@@ -10,15 +10,14 @@ import {
   logout,
   getAccessToken,
   ensureGoogleAccessToken,
-  ensureFirebaseUser,
   clearAccessToken,
 } from '../services/auth';
 import {
+  listFilesInGoogleDriveFolder,
   uploadFileToGoogleDriveFolder,
   uploadFileViaWebhook,
   deleteFileFromGoogleDrive,
 } from '../services/gdriveService';
-import type { SharedUpload } from '../services/checklistSync';
 
 export const GDRIVE_MAIN_FOLDER_URL =
   'https://drive.google.com/drive/folders/1Gz4nGIrBVmlM9kwcnat_L9uedqmw4KyJ?usp=sharing';
@@ -80,6 +79,7 @@ interface K3ContextType {
   currentUser: User | null;
   isLoggedIn: boolean;
   isLoggingIn: boolean;
+  driveSyncEnabled: boolean;
   handleGoogleLogin: () => Promise<boolean>;
   handleGoogleLogout: () => Promise<void>;
   gdriveMainFolderUrl: string;
@@ -177,14 +177,19 @@ export const K3Provider: React.FC<{ children: React.ReactNode }> = ({ children }
   // Google Auth State
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState<boolean>(false);
+  const [hasDriveAccessToken, setHasDriveAccessToken] = useState<boolean>(false);
+  const ownUploadedDriveIdsRef = useRef(new Set<string>());
+  const hasReportedDriveSyncErrorRef = useRef(false);
 
   useEffect(() => {
     const unsubscribe = initAuth(
       (user) => {
         setCurrentUser(user);
+        setHasDriveAccessToken(!!getAccessToken());
       },
       () => {
         setCurrentUser(null);
+        setHasDriveAccessToken(false);
       }
     );
     return () => unsubscribe();
@@ -196,6 +201,7 @@ export const K3Provider: React.FC<{ children: React.ReactNode }> = ({ children }
       const res = await googleSignIn();
       if (res?.user) {
         setCurrentUser(res.user);
+        setHasDriveAccessToken(true);
         showToast(
           'success',
           `✓ Berhasil terhubung dengan Google (${res.user.email}). File otomatis tersimpan ke folder Komite K3.`,
@@ -228,7 +234,7 @@ export const K3Provider: React.FC<{ children: React.ReactNode }> = ({ children }
     try {
       await logout();
       setCurrentUser(null);
-      await ensureFirebaseUser();
+      setHasDriveAccessToken(false);
       showToast('info', 'Berhasil keluar dari akun Google.');
     } catch (err: any) {
       console.error('Logout error:', err);
@@ -250,10 +256,6 @@ export const K3Provider: React.FC<{ children: React.ReactNode }> = ({ children }
     }
     return INITIAL_MASTER_CHECKLIST;
   });
-  const sharedUploadsRef = useRef<Map<string, SharedUpload>>(new Map());
-  const ownUploadIdsRef = useRef(new Set<string>());
-  const hasReportedSyncErrorRef = useRef(false);
-
   // Save items to localStorage whenever they change
   useEffect(() => {
     try {
@@ -263,92 +265,86 @@ export const K3Provider: React.FC<{ children: React.ReactNode }> = ({ children }
     }
   }, [items]);
 
+  const isLoggedIn = !!currentUser && !currentUser.isAnonymous && hasDriveAccessToken;
+
+  const [driveSyncEnabled, setDriveSyncEnabled] = useState(false);
+
   useEffect(() => {
+    if (!isLoggedIn) {
+      setDriveSyncEnabled(false);
+      return;
+    }
+
     let isActive = true;
-    let unsubscribe: (() => void) | undefined;
-    const handleSyncError = (error: Error) => {
-      console.error('Shared upload sync failed:', error);
-      if (!hasReportedSyncErrorRef.current) {
-        hasReportedSyncErrorRef.current = true;
-        showToast(
-          'error',
-          'Sinkronisasi update antar pengguna gagal. Pastikan Firestore dan login anonim sudah diaktifkan di Firebase.'
-        );
+    let timer: ReturnType<typeof setTimeout>;
+    let isPolling = false;
+    let knownFileIds: Set<string> | null = null;
+
+    const pollDriveFolder = async () => {
+      if (!isActive || isPolling) return;
+      isPolling = true;
+
+      try {
+        const token = await getAccessToken();
+        if (!token) {
+          setHasDriveAccessToken(false);
+          return;
+        }
+
+        const files = await listFilesInGoogleDriveFolder(GDRIVE_FOLDER_ID, token);
+        const currentFileIds = new Set(files.map((file) => file.id));
+
+        if (knownFileIds) {
+          const newlyAddedFiles = files.filter(
+            (file) =>
+              !knownFileIds?.has(file.id) &&
+              !ownUploadedDriveIdsRef.current.has(file.id)
+          );
+          if (newlyAddedFiles.length === 1) {
+            const file = newlyAddedFiles[0];
+            showToast(
+              'info',
+              `Berkas baru di folder Google Drive: ${file.name}`,
+              file.webViewLink,
+              file.webViewLink ? 'Buka berkas' : undefined
+            );
+          } else if (newlyAddedFiles.length > 1) {
+            showToast(
+              'info',
+              `${newlyAddedFiles.length} berkas baru ditambahkan ke folder Google Drive.`
+            );
+          }
+        }
+
+        knownFileIds = currentFileIds;
+        ownUploadedDriveIdsRef.current.clear();
+        setDriveSyncEnabled(true);
+        hasReportedDriveSyncErrorRef.current = false;
+      } catch (error) {
+        console.error('Google Drive update sync failed:', error);
+        setHasDriveAccessToken(false);
+        setDriveSyncEnabled(false);
+        if (!hasReportedDriveSyncErrorRef.current) {
+          hasReportedDriveSyncErrorRef.current = true;
+          showToast(
+            'error',
+            'Tidak dapat membaca update Google Drive. Pastikan Anda menyetujui izin baca metadata Drive dan memiliki akses ke folder K3RS.'
+          );
+        }
+      } finally {
+        isPolling = false;
+        if (isActive) {
+          timer = setTimeout(pollDriveFolder, 30_000);
+        }
       }
     };
 
-    import('../services/checklistSync')
-      .then(({ subscribeToSharedUploads }) => {
-        if (!isActive) return;
-        unsubscribe = subscribeToSharedUploads(
-          (uploads, newlyUploaded) => {
-            const previousUploads = sharedUploadsRef.current;
-            const nextUploads = new Map(uploads.map((upload) => [upload.document.id, upload]));
-            sharedUploadsRef.current = nextUploads;
-            const newlyUploadedIds = new Set(
-              newlyUploaded.map((upload) => upload.document.id)
-            );
-            uploads.forEach((upload) => {
-              if (!newlyUploadedIds.has(upload.document.id)) {
-                ownUploadIdsRef.current.delete(upload.document.id);
-              }
-            });
-
-            const mergeSharedUploads = (item: MasterChecklistItem): MasterChecklistItem => {
-              const localDocuments = item.documents.filter(
-                (document) =>
-                  !previousUploads.has(document.id) && !nextUploads.has(document.id)
-              );
-              const sharedDocuments = uploads
-                .filter((upload) => upload.itemId === item.id)
-                .map((upload) => {
-                  const localDocument = item.documents.find(
-                    (document) => document.id === upload.document.id
-                  );
-                  return localDocument?.dataUrl
-                    ? { ...upload.document, dataUrl: localDocument.dataUrl }
-                    : upload.document;
-                });
-
-              return {
-                ...item,
-                documents: [...sharedDocuments, ...localDocuments],
-                status: sharedDocuments.length > 0 ? 'lengkap' : item.status,
-              };
-            };
-
-            setItems((currentItems) => currentItems.map(mergeSharedUploads));
-            setActiveDocModalItem((currentItem) =>
-              currentItem ? mergeSharedUploads(currentItem) : currentItem
-            );
-
-            newlyUploaded.forEach((upload) => {
-              if (ownUploadIdsRef.current.delete(upload.document.id)) return;
-              const item = INITIAL_MASTER_CHECKLIST.find(
-                (checklistItem) => checklistItem.id === upload.itemId
-              );
-              showToast(
-                'info',
-                `${upload.uploadedBy} mengunggah ${upload.document.name}${
-                  item ? ` — ${item.title}` : ''
-                }.`,
-                upload.document.gdriveUrl,
-                upload.document.gdriveUrl ? 'Buka berkas' : undefined
-              );
-            });
-          },
-          handleSyncError
-        );
-      })
-      .catch((error: unknown) =>
-        handleSyncError(error instanceof Error ? error : new Error(String(error)))
-      );
-
+    void pollDriveFolder();
     return () => {
       isActive = false;
-      unsubscribe?.();
+      clearTimeout(timer);
     };
-  }, []);
+  }, [isLoggedIn]);
 
   // Handle URL hash / path synchronization
   useEffect(() => {
@@ -429,6 +425,7 @@ export const K3Provider: React.FC<{ children: React.ReactNode }> = ({ children }
 
       let isGDrive = false;
       let gdriveUrl = '';
+      let gdriveFileId = '';
 
       // Direct Automatic Upload to Google Drive folder K3 RS via Webhook (Zero login required for all hospital staff)
       try {
@@ -436,6 +433,7 @@ export const K3Provider: React.FC<{ children: React.ReactNode }> = ({ children }
         if (webhookResult?.webViewLink) {
           isGDrive = true;
           gdriveUrl = webhookResult.webViewLink;
+          gdriveFileId = webhookResult.id;
           anyGDriveSuccess = true;
         }
       } catch (webhookErr: any) {
@@ -453,6 +451,7 @@ export const K3Provider: React.FC<{ children: React.ReactNode }> = ({ children }
             if (gdriveResult?.webViewLink) {
               isGDrive = true;
               gdriveUrl = gdriveResult.webViewLink;
+              gdriveFileId = gdriveResult.id;
               anyGDriveSuccess = true;
             }
           } catch (driveErr: any) {
@@ -463,6 +462,7 @@ export const K3Provider: React.FC<{ children: React.ReactNode }> = ({ children }
           driveErrorMessage = webhookErr.message;
         }
       }
+      if (gdriveFileId) ownUploadedDriveIdsRef.current.add(gdriveFileId);
 
       let dataUrl: string | undefined = undefined;
       if (file.type.startsWith('image/') && file.size < 2 * 1024 * 1024) {
@@ -523,34 +523,8 @@ export const K3Provider: React.FC<{ children: React.ReactNode }> = ({ children }
       return prev;
     });
 
-    const sharedDocuments = newDocs.filter((document) => document.isGDrive);
-    sharedDocuments.forEach((document) => ownUploadIdsRef.current.add(document.id));
-    const sharedUploadResults = await Promise.allSettled(
-      sharedDocuments.map((document) =>
-        import('../services/checklistSync').then(({ publishSharedUpload }) =>
-          publishSharedUpload(itemId, document, currentUser?.displayName || 'Pengguna')
-        )
-      )
-    );
-    const failedSharedUploads = sharedUploadResults
-      .map((result, index) => ({ result, document: sharedDocuments[index] }))
-      .filter(
-        (entry): entry is { result: PromiseRejectedResult; document: DocumentEvidence } =>
-          entry.result.status === 'rejected'
-      );
-    failedSharedUploads.forEach(({ document }) => ownUploadIdsRef.current.delete(document.id));
-
     // Provide explicit user feedback
-    if (failedSharedUploads.length > 0) {
-      const error = failedSharedUploads[0].result.reason;
-      console.error('Failed to publish upload update:', error);
-      showToast(
-        'error',
-        `${newDocs.length} berkas diproses, tetapi update tidak tersinkron ke pengguna lain: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
-    } else if (anyGDriveSuccess) {
+    if (anyGDriveSuccess) {
       showToast(
         'success',
         `✓ ${newDocs.length} berkas berhasil tersimpan di Google Drive!`,
@@ -634,39 +608,13 @@ export const K3Provider: React.FC<{ children: React.ReactNode }> = ({ children }
         })
       );
 
-      const sharedDocument = {
-        ...doc,
-        isGDrive: true,
-        gdriveUrl: gdriveResult.webViewLink,
-      };
-      ownUploadIdsRef.current.add(docId);
-      let sharedSyncFailed = false;
-      try {
-        const { publishSharedUpload } = await import('../services/checklistSync');
-        await publishSharedUpload(
-          itemId,
-          sharedDocument,
-          currentUser?.displayName || 'Pengguna'
-        );
-      } catch (syncError) {
-        sharedSyncFailed = true;
-        ownUploadIdsRef.current.delete(docId);
-        console.error('Failed to publish synced document:', syncError);
-      }
-
-      if (sharedSyncFailed) {
-        showToast(
-          'error',
-          `Berkas tersimpan di Google Drive, tetapi update tidak tersinkron ke pengguna lain.`
-        );
-      } else {
-        showToast(
-          'success',
-          `✓ Berkas "${doc.name}" berhasil tersimpan di folder Google Drive Komite K3!`,
-          gdriveResult.webViewLink || GDRIVE_MAIN_FOLDER_URL,
-          'Lihat di Google Drive'
-        );
-      }
+      ownUploadedDriveIdsRef.current.add(gdriveResult.id);
+      showToast(
+        'success',
+        `✓ Berkas "${doc.name}" berhasil tersimpan di folder Google Drive Komite K3!`,
+        gdriveResult.webViewLink || GDRIVE_MAIN_FOLDER_URL,
+        'Lihat di Google Drive'
+      );
       return true;
     } catch (err: any) {
       console.error('Sync to GDrive failed:', err);
@@ -719,6 +667,7 @@ export const K3Provider: React.FC<{ children: React.ReactNode }> = ({ children }
                   doc.docNumber
                 );
                 syncedCount++;
+                ownUploadedDriveIdsRef.current.add(res.id);
                 return {
                   ...doc,
                   isGDrive: true,
@@ -741,50 +690,13 @@ export const K3Provider: React.FC<{ children: React.ReactNode }> = ({ children }
 
     setItems(updatedItems);
 
-    const syncedDocuments = updatedItems.flatMap((item) =>
-      item.documents
-        .filter((document) => {
-          const previous = items
-            .find((previousItem) => previousItem.id === item.id)
-            ?.documents.find((previousDocument) => previousDocument.id === document.id);
-          return document.isGDrive && !previous?.isGDrive;
-        })
-        .map((document) => ({ itemId: item.id, document }))
-    );
-    syncedDocuments.forEach(({ document }) =>
-      ownUploadIdsRef.current.add(document.id)
-    );
-    const syncResults = await Promise.allSettled(
-      syncedDocuments.map(({ itemId, document }) =>
-        import('../services/checklistSync').then(({ publishSharedUpload }) =>
-          publishSharedUpload(itemId, document, currentUser?.displayName || 'Pengguna')
-        )
-      )
-    );
-    const hasSharedSyncFailure = syncResults.some(
-      (result) => result.status === 'rejected'
-    );
-    syncResults.forEach((result, index) => {
-      if (result.status === 'rejected') {
-        ownUploadIdsRef.current.delete(syncedDocuments[index].document.id);
-        console.error('Failed to publish synced document:', result.reason);
-      }
-    });
-
     if (syncedCount > 0) {
-      if (hasSharedSyncFailure) {
-        showToast(
-          'error',
-          `${syncedCount} berkas tersimpan di Google Drive, tetapi sebagian update tidak tersinkron ke pengguna lain.`
-        );
-      } else {
-        showToast(
-          'success',
-          `✓ ${syncedCount} berkas berhasil tersimpan di folder Google Drive Komite K3!`,
-          GDRIVE_MAIN_FOLDER_URL,
-          'Buka Google Drive'
-        );
-      }
+      showToast(
+        'success',
+        `✓ ${syncedCount} berkas berhasil tersimpan di folder Google Drive Komite K3!`,
+        GDRIVE_MAIN_FOLDER_URL,
+        'Buka Google Drive'
+      );
     } else {
       showToast('info', 'Semua berkas yang tersedia sudah tersimpan di Google Drive.');
     }
@@ -816,6 +728,9 @@ export const K3Provider: React.FC<{ children: React.ReactNode }> = ({ children }
       verified: true,
     };
 
+    const driveFileId = gdriveUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/)?.[1];
+    if (driveFileId) ownUploadedDriveIdsRef.current.add(driveFileId);
+
     setItems(prevItems =>
       prevItems.map(item => {
         if (item.id === itemId) {
@@ -846,21 +761,6 @@ export const K3Provider: React.FC<{ children: React.ReactNode }> = ({ children }
       return prev;
     });
 
-    ownUploadIdsRef.current.add(newDoc.id);
-    import('../services/checklistSync')
-      .then(({ publishSharedUpload }) =>
-        publishSharedUpload(itemId, newDoc, currentUser?.displayName || 'Pengguna')
-      )
-      .catch((error: unknown) => {
-        ownUploadIdsRef.current.delete(newDoc.id);
-        console.error('Failed to publish linked Google Drive document:', error);
-        showToast(
-          'error',
-          `Berkas ditautkan, tetapi update tidak tersinkron ke pengguna lain: ${
-            error instanceof Error ? error.message : String(error)
-          }`
-        );
-      });
   };
 
   const deleteDocument = async (itemId: string, docId: string) => {
@@ -912,20 +812,6 @@ export const K3Provider: React.FC<{ children: React.ReactNode }> = ({ children }
       }
       return prev;
     });
-
-    if (sharedUploadsRef.current.has(docId)) {
-      import('../services/checklistSync')
-        .then(({ removeSharedUpload }) => removeSharedUpload(docId))
-        .catch((error: unknown) => {
-          console.error('Failed to remove shared upload:', error);
-          showToast(
-            'error',
-            `Dokumen dihapus di perangkat ini, tetapi update penghapusan gagal disinkronkan: ${
-              error instanceof Error ? error.message : String(error)
-            }`
-          );
-        });
-    }
 
     showToast('info', 'Dokumen berhasil dihapus.');
   };
@@ -1033,8 +919,9 @@ export const K3Provider: React.FC<{ children: React.ReactNode }> = ({ children }
 
         // Authentication & Google Drive
         currentUser,
-        isLoggedIn: !!currentUser && !currentUser.isAnonymous,
+        isLoggedIn,
         isLoggingIn,
+        driveSyncEnabled,
         handleGoogleLogin,
         handleGoogleLogout,
         gdriveMainFolderUrl: GDRIVE_MAIN_FOLDER_URL,
