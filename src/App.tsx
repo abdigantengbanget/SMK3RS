@@ -6,16 +6,13 @@
 import React from 'react';
 import { K3Provider, useK3 } from './context/K3Context';
 import { Sidebar } from './components/Sidebar';
-import { TopNavbar } from './components/TopNavbar';
 import { RingkasanView } from './components/modules/RingkasanView';
 import { ModuleChecklistView } from './components/modules/ModuleChecklistView';
 import { ManageDocModal } from './components/modals/ManageDocModal';
 import { DocViewerModal } from './components/modals/DocViewerModal';
-import { ExportModal } from './components/modals/ExportModal';
-import { HospitalInfoModal } from './components/modals/HospitalInfoModal';
 import { GDriveConfigModal } from './components/modals/GDriveConfigModal';
 import { ToastNotification } from './components/ToastNotification';
-import { ShieldCheck, ExternalLink } from 'lucide-react';
+import { Menu, ShieldCheck, ExternalLink } from 'lucide-react';
 
 const MainLayout: React.FC = () => {
   const {
@@ -25,6 +22,7 @@ const MainLayout: React.FC = () => {
     deleteDocument,
     isGDriveConfigModalOpen,
     setIsGDriveConfigModalOpen,
+    setIsMobileSidebarOpen,
   } = useK3();
 
   return (
@@ -34,11 +32,17 @@ const MainLayout: React.FC = () => {
 
       {/* Main Content Area with independent scroll */}
       <div className="flex flex-1 flex-col h-screen overflow-y-auto min-w-0">
-        {/* Top Navbar */}
-        <TopNavbar />
-
         {/* Dynamic Module Content */}
         <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto">
+          <button
+            type="button"
+            onClick={() => setIsMobileSidebarOpen(true)}
+            className="mb-4 inline-flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 shadow-sm lg:hidden"
+            aria-label="Buka Menu Navigasi"
+          >
+            <Menu className="h-4 w-4" />
+            Menu
+          </button>
           {activeModuleId === 'RINGKASAN' ? (
             <RingkasanView />
           ) : (
@@ -88,8 +92,6 @@ const MainLayout: React.FC = () => {
             : undefined
         }
       />
-      <ExportModal />
-      <HospitalInfoModal />
       <GDriveConfigModal
         isOpen={isGDriveConfigModalOpen}
         onClose={() => setIsGDriveConfigModalOpen(false)}

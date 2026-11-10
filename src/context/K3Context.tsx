@@ -69,10 +69,6 @@ interface K3ContextType {
   setActiveDocModalItem: (item: MasterChecklistItem | null) => void;
   viewingDocState: ViewingDocState | null;
   setViewingDocState: (state: ViewingDocState | null) => void;
-  isExportModalOpen: boolean;
-  setIsExportModalOpen: (open: boolean) => void;
-  isHospitalInfoModalOpen: boolean;
-  setIsHospitalInfoModalOpen: (open: boolean) => void;
   isGDriveConfigModalOpen: boolean;
   setIsGDriveConfigModalOpen: (open: boolean) => void;
   gdriveWebhookUrl: string;
@@ -129,8 +125,6 @@ export const K3Provider: React.FC<{ children: React.ReactNode }> = ({ children }
   const [statusFilter, setStatusFilter] = useState<'all' | 'terupload' | 'belum'>('all');
   const [activeDocModalItem, setActiveDocModalItem] = useState<MasterChecklistItem | null>(null);
   const [viewingDocState, setViewingDocState] = useState<ViewingDocState | null>(null);
-  const [isExportModalOpen, setIsExportModalOpen] = useState<boolean>(false);
-  const [isHospitalInfoModalOpen, setIsHospitalInfoModalOpen] = useState<boolean>(false);
   const [isGDriveConfigModalOpen, setIsGDriveConfigModalOpen] = useState<boolean>(false);
   const [toast, setToast] = useState<ToastNotificationState | null>(null);
 
@@ -819,10 +813,6 @@ export const K3Provider: React.FC<{ children: React.ReactNode }> = ({ children }
         setActiveDocModalItem,
         viewingDocState,
         setViewingDocState,
-        isExportModalOpen,
-        setIsExportModalOpen,
-        isHospitalInfoModalOpen,
-        setIsHospitalInfoModalOpen,
         isGDriveConfigModalOpen,
         setIsGDriveConfigModalOpen,
         gdriveWebhookUrl,
