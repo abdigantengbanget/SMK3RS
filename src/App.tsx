@@ -6,7 +6,6 @@
 import React from "react";
 import { K3Provider, useK3 } from "./context/K3Context";
 import { Sidebar } from "./components/Sidebar";
-import { TopNavbar } from "./components/TopNavbar";
 import { RingkasanView } from "./components/modules/RingkasanView";
 import { ModuleChecklistView } from "./components/modules/ModuleChecklistView";
 import { ManageDocModal } from "./components/modals/ManageDocModal";
@@ -15,7 +14,7 @@ import { ExportModal } from "./components/modals/ExportModal";
 import { HospitalInfoModal } from "./components/modals/HospitalInfoModal";
 import { GDriveConfigModal } from "./components/modals/GDriveConfigModal";
 import ToastNotification from "./components/ToastNotification";
-import { ShieldCheck, ExternalLink } from "lucide-react";
+import { ShieldCheck, ExternalLink, Menu } from "lucide-react";
 
 const MainLayout: React.FC = () => {
   const {
@@ -25,6 +24,7 @@ const MainLayout: React.FC = () => {
     deleteDocument,
     isGDriveConfigModalOpen,
     setIsGDriveConfigModalOpen,
+    setIsMobileSidebarOpen,
   } = useK3();
 
   return (
@@ -34,11 +34,20 @@ const MainLayout: React.FC = () => {
 
       {/* Main Content Area with independent scroll */}
       <div className="flex flex-1 flex-col h-screen overflow-y-auto min-w-0">
-        {/* Top Navbar */}
-        <TopNavbar />
-
         {/* Dynamic Module Content */}
         <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto">
+          {/* Mobile-only menu trigger */}
+          <div className="lg:hidden mb-4 flex items-center">
+            <button
+              onClick={() => setIsMobileSidebarOpen(true)}
+              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 text-xs font-semibold shadow-2xs hover:bg-slate-50 transition-colors"
+              aria-label="Buka Menu"
+            >
+              <Menu className="h-4 w-4 text-teal-600" />
+              <span>Menu Navigasi</span>
+            </button>
+          </div>
+
           {activeModuleId === "RINGKASAN" ? (
             <RingkasanView />
           ) : (
