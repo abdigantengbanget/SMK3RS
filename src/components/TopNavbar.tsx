@@ -23,7 +23,7 @@ export const TopNavbar: React.FC = () => {
         <button
           onClick={() => setIsMobileSidebarOpen(true)}
           className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 hover:text-slate-900 shadow-2xs transition-colors lg:hidden"
-          aria-label="Buka Menu Navigasi"
+          aria-label="Buka Menu"
         >
           <Menu className="h-5 w-5" />
         </button>

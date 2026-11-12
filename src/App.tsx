@@ -44,7 +44,7 @@ const MainLayout: React.FC = () => {
               aria-label="Buka Menu"
             >
               <Menu className="h-4 w-4 text-teal-600" />
-              <span>Menu Navigasi</span>
+              <span>Menu</span>
             </button>
           </div>
 
