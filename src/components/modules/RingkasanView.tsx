@@ -83,10 +83,6 @@ export const RingkasanView: React.FC = () => {
           <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
             Ringkasan SMK3RS
           </h1>
-          <p className="text-xs sm:text-sm text-slate-600 max-w-2xl leading-relaxed">
-            Sistem Manajemen Keselamatan dan Kesehatan Kerja Rumah Sakit Semen Gresik. Pantau kelengkapan
-            dokumen persyaratan dan kepatuhan standar MFK dalam satu dashboard terpusat.
-          </p>
         </div>
 
         {/* Floating pill badge */}

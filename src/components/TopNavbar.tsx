@@ -2,8 +2,6 @@ import React from 'react';
 import {
   Menu,
   ChevronRight,
-  Download,
-  Building2,
 } from 'lucide-react';
 import { useK3 } from '../context/K3Context';
 import { OFFICIAL_SIDEBAR_MENUS } from '../data/menuConfig';
@@ -13,8 +11,6 @@ export const TopNavbar: React.FC = () => {
     activeModuleId,
     setActiveModuleId,
     setIsMobileSidebarOpen,
-    setIsExportModalOpen,
-    setIsHospitalInfoModalOpen,
     isCloudSynced,
   } = useK3();
 
@@ -92,25 +88,6 @@ export const TopNavbar: React.FC = () => {
           </span>
           <span className="hidden md:inline">{isCloudSynced ? 'Realtime' : 'Menghubungkan...'}</span>
         </div>
-        {/* Export Report Quick Action */}
-        <button
-          onClick={() => setIsExportModalOpen(true)}
-          className="inline-flex items-center gap-2 h-9 px-3.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 shadow-2xs transition-all hover:border-slate-300"
-          title="Ekspor Laporan Audit & Data SMK3RS"
-        >
-          <Download className="h-3.5 w-3.5 text-slate-500" />
-          <span className="hidden md:inline">Ekspor Laporan</span>
-        </button>
-
-        {/* Hospital Info Action */}
-        <button
-          onClick={() => setIsHospitalInfoModalOpen(true)}
-          className="inline-flex items-center justify-center h-9 w-9 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 shadow-2xs transition-all hover:border-slate-300"
-          title="Informasi RS Semen Gresik & Komite K3"
-          aria-label="Informasi Rumah Sakit"
-        >
-          <Building2 className="h-4 w-4 text-slate-500" />
-        </button>
       </div>
     </header>
   );
