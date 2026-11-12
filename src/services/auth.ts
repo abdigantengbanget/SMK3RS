@@ -2,32 +2,17 @@
  * Authentication service with Google Workspace (Google Drive) OAuth
  */
 
-import { initializeApp } from 'firebase/app';
 import {
-  getAuth,
   signInWithPopup,
   GoogleAuthProvider,
   onAuthStateChanged,
   User,
   signOut,
 } from 'firebase/auth';
-import defaultFirebaseConfig from '../../firebase-applet-config.json';
-
-const firebaseConfig = {
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || defaultFirebaseConfig.projectId,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || defaultFirebaseConfig.appId,
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || defaultFirebaseConfig.apiKey,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || defaultFirebaseConfig.authDomain,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || defaultFirebaseConfig.storageBucket,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || defaultFirebaseConfig.messagingSenderId,
-};
-
-export const app = initializeApp(firebaseConfig);
-export const auth = getAuth(app);
+import { auth } from './firebase';
 
 export const SCOPES = [
   'https://www.googleapis.com/auth/drive.file',
-  'https://www.googleapis.com/auth/drive.metadata.readonly',
 ];
 
 const provider = new GoogleAuthProvider();

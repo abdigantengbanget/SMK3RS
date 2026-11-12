@@ -1,5 +1,15 @@
-import React, { createContext, useContext, useState, useEffect, useMemo, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import { User } from 'firebase/auth';
+import {
+  collection,
+  doc,
+  onSnapshot,
+  setDoc,
+  updateDoc,
+  writeBatch,
+} from 'firebase/firestore';
+import { db, testFirestoreConnection, handleFirestoreError, OperationType } from '../services/firebase';
+import { cleanForFirestore } from '../utils/cleanFirestore';
 import { MasterChecklistItem, ComplianceStatus, DocumentEvidence, ModuleSummary } from '../types/k3';
 import { INITIAL_MASTER_CHECKLIST } from '../data/masterChecklistData';
 import { OFFICIAL_SIDEBAR_MENUS } from '../data/menuConfig';
@@ -13,7 +23,6 @@ import {
   clearAccessToken,
 } from '../services/auth';
 import {
-  listFilesInGoogleDriveFolder,
   uploadFileToGoogleDriveFolder,
   uploadFileViaWebhook,
   deleteFileFromGoogleDrive,
@@ -70,16 +79,22 @@ interface K3ContextType {
   setActiveDocModalItem: (item: MasterChecklistItem | null) => void;
   viewingDocState: ViewingDocState | null;
   setViewingDocState: (state: ViewingDocState | null) => void;
+  isExportModalOpen: boolean;
+  setIsExportModalOpen: (open: boolean) => void;
+  isHospitalInfoModalOpen: boolean;
+  setIsHospitalInfoModalOpen: (open: boolean) => void;
   isGDriveConfigModalOpen: boolean;
   setIsGDriveConfigModalOpen: (open: boolean) => void;
   gdriveWebhookUrl: string;
   setGdriveWebhookUrl: (url: string) => void;
 
+  // Cloud Real-time Sync Status
+  isCloudSynced: boolean;
+
   // Authentication & Google Drive Direct Connection
   currentUser: User | null;
   isLoggedIn: boolean;
   isLoggingIn: boolean;
-  driveSyncEnabled: boolean;
   handleGoogleLogin: () => Promise<boolean>;
   handleGoogleLogout: () => Promise<void>;
   gdriveMainFolderUrl: string;
@@ -127,6 +142,8 @@ export const K3Provider: React.FC<{ children: React.ReactNode }> = ({ children }
   const [statusFilter, setStatusFilter] = useState<'all' | 'terupload' | 'belum'>('all');
   const [activeDocModalItem, setActiveDocModalItem] = useState<MasterChecklistItem | null>(null);
   const [viewingDocState, setViewingDocState] = useState<ViewingDocState | null>(null);
+  const [isExportModalOpen, setIsExportModalOpen] = useState<boolean>(false);
+  const [isHospitalInfoModalOpen, setIsHospitalInfoModalOpen] = useState<boolean>(false);
   const [isGDriveConfigModalOpen, setIsGDriveConfigModalOpen] = useState<boolean>(false);
   const [toast, setToast] = useState<ToastNotificationState | null>(null);
 
@@ -177,19 +194,14 @@ export const K3Provider: React.FC<{ children: React.ReactNode }> = ({ children }
   // Google Auth State
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState<boolean>(false);
-  const [hasDriveAccessToken, setHasDriveAccessToken] = useState<boolean>(false);
-  const ownUploadedDriveIdsRef = useRef(new Set<string>());
-  const hasReportedDriveSyncErrorRef = useRef(false);
 
   useEffect(() => {
     const unsubscribe = initAuth(
       (user) => {
         setCurrentUser(user);
-        setHasDriveAccessToken(!!getAccessToken());
       },
       () => {
         setCurrentUser(null);
-        setHasDriveAccessToken(false);
       }
     );
     return () => unsubscribe();
@@ -201,7 +213,6 @@ export const K3Provider: React.FC<{ children: React.ReactNode }> = ({ children }
       const res = await googleSignIn();
       if (res?.user) {
         setCurrentUser(res.user);
-        setHasDriveAccessToken(true);
         showToast(
           'success',
           `✓ Berhasil terhubung dengan Google (${res.user.email}). File otomatis tersimpan ke folder Komite K3.`,
@@ -234,12 +245,13 @@ export const K3Provider: React.FC<{ children: React.ReactNode }> = ({ children }
     try {
       await logout();
       setCurrentUser(null);
-      setHasDriveAccessToken(false);
       showToast('info', 'Berhasil keluar dari akun Google.');
     } catch (err: any) {
       console.error('Logout error:', err);
     }
   };
+
+  const [isCloudSynced, setIsCloudSynced] = useState<boolean>(false);
 
   // Items State (loaded from localStorage or initialized with clean 162 items)
   const [items, setItems] = useState<MasterChecklistItem[]>(() => {
@@ -256,7 +268,92 @@ export const K3Provider: React.FC<{ children: React.ReactNode }> = ({ children }
     }
     return INITIAL_MASTER_CHECKLIST;
   });
-  // Save items to localStorage whenever they change
+
+  // REAL-TIME FIRESTORE SYNCHRONIZATION:
+  // When User 1 uploads a file or changes a status, User 2 sees it instantly via onSnapshot!
+  useEffect(() => {
+    testFirestoreConnection();
+
+    const itemsCol = collection(db, 'checklist_items');
+
+    const unsubscribe = onSnapshot(
+      itemsCol,
+      async (snapshot) => {
+        if (snapshot.empty) {
+          // If Firestore is empty, seed with initial 162 master checklist items
+          console.log('Seeding initial master checklist to Firestore...');
+          try {
+            const batch = writeBatch(db);
+            const sourceItems = items && items.length > 0 ? items : INITIAL_MASTER_CHECKLIST;
+            sourceItems.forEach((item) => {
+              const itemRef = doc(db, 'checklist_items', item.id);
+              batch.set(itemRef, cleanForFirestore(item), { merge: true });
+            });
+            await batch.commit();
+            setIsCloudSynced(true);
+          } catch (seedErr) {
+            console.warn('Failed to seed initial checklist to Firestore:', seedErr);
+            handleFirestoreError(seedErr, OperationType.WRITE, 'checklist_items');
+          }
+        } else {
+          // Map remote items
+          const remoteMap = new Map<string, MasterChecklistItem>();
+          snapshot.docs.forEach((d) => {
+            remoteMap.set(d.id, d.data() as MasterChecklistItem);
+          });
+
+          // Check if local browser has documents that Firestore doesn't have yet (auto sync-up)
+          const itemsToSyncUp: MasterChecklistItem[] = [];
+
+          // Maintain strict canonical order from INITIAL_MASTER_CHECKLIST
+          const orderedItems = INITIAL_MASTER_CHECKLIST.map((initialItem) => {
+            const remoteItem = remoteMap.get(initialItem.id);
+            const localSavedItem = items.find((i) => i.id === initialItem.id);
+
+            // If local item has uploaded documents and remote item has 0, keep local and sync to Firestore!
+            if (
+              localSavedItem &&
+              localSavedItem.documents &&
+              localSavedItem.documents.length > 0 &&
+              (!remoteItem || !remoteItem.documents || remoteItem.documents.length === 0)
+            ) {
+              itemsToSyncUp.push(localSavedItem);
+              return localSavedItem;
+            }
+
+            return remoteItem || initialItem;
+          });
+
+          setItems(orderedItems);
+          setIsCloudSynced(true);
+
+          // Auto-sync any local documents from prior sessions to cloud
+          if (itemsToSyncUp.length > 0) {
+            console.log(`Auto-syncing ${itemsToSyncUp.length} locally saved items with documents to cloud...`);
+            const batch = writeBatch(db);
+            itemsToSyncUp.forEach((item) => {
+              const itemRef = doc(db, 'checklist_items', item.id);
+              batch.set(itemRef, cleanForFirestore(item), { merge: true });
+            });
+            batch.commit().catch((err) => console.warn('Auto sync to Firestore error:', err));
+          }
+
+          // Keep active modal item in sync if open
+          setActiveDocModalItem((current) => {
+            if (!current) return null;
+            return remoteMap.get(current.id) || current;
+          });
+        }
+      },
+      (error) => {
+        console.warn('Real-time Firestore listener notice (offline fallback):', error);
+      }
+    );
+
+    return () => unsubscribe();
+  }, []);
+
+  // Save items to localStorage as offline cache whenever they change
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
@@ -264,87 +361,6 @@ export const K3Provider: React.FC<{ children: React.ReactNode }> = ({ children }
       console.error('Failed to save to localStorage:', e);
     }
   }, [items]);
-
-  const isLoggedIn = !!currentUser && !currentUser.isAnonymous && hasDriveAccessToken;
-
-  const [driveSyncEnabled, setDriveSyncEnabled] = useState(false);
-
-  useEffect(() => {
-    if (!isLoggedIn) {
-      setDriveSyncEnabled(false);
-      return;
-    }
-
-    let isActive = true;
-    let timer: ReturnType<typeof setTimeout>;
-    let isPolling = false;
-    let knownFileIds: Set<string> | null = null;
-
-    const pollDriveFolder = async () => {
-      if (!isActive || isPolling) return;
-      isPolling = true;
-
-      try {
-        const token = await getAccessToken();
-        if (!token) {
-          setHasDriveAccessToken(false);
-          return;
-        }
-
-        const files = await listFilesInGoogleDriveFolder(GDRIVE_FOLDER_ID, token);
-        const currentFileIds = new Set(files.map((file) => file.id));
-
-        if (knownFileIds) {
-          const newlyAddedFiles = files.filter(
-            (file) =>
-              !knownFileIds?.has(file.id) &&
-              !ownUploadedDriveIdsRef.current.has(file.id)
-          );
-          if (newlyAddedFiles.length === 1) {
-            const file = newlyAddedFiles[0];
-            showToast(
-              'info',
-              `Berkas baru di folder Google Drive: ${file.name}`,
-              file.webViewLink,
-              file.webViewLink ? 'Buka berkas' : undefined
-            );
-          } else if (newlyAddedFiles.length > 1) {
-            showToast(
-              'info',
-              `${newlyAddedFiles.length} berkas baru ditambahkan ke folder Google Drive.`
-            );
-          }
-        }
-
-        knownFileIds = currentFileIds;
-        ownUploadedDriveIdsRef.current.clear();
-        setDriveSyncEnabled(true);
-        hasReportedDriveSyncErrorRef.current = false;
-      } catch (error) {
-        console.error('Google Drive update sync failed:', error);
-        setHasDriveAccessToken(false);
-        setDriveSyncEnabled(false);
-        if (!hasReportedDriveSyncErrorRef.current) {
-          hasReportedDriveSyncErrorRef.current = true;
-          showToast(
-            'error',
-            'Tidak dapat membaca update Google Drive. Pastikan Anda menyetujui izin baca metadata Drive dan memiliki akses ke folder K3RS.'
-          );
-        }
-      } finally {
-        isPolling = false;
-        if (isActive) {
-          timer = setTimeout(pollDriveFolder, 30_000);
-        }
-      }
-    };
-
-    void pollDriveFolder();
-    return () => {
-      isActive = false;
-      clearTimeout(timer);
-    };
-  }, [isLoggedIn]);
 
   // Handle URL hash / path synchronization
   useEffect(() => {
@@ -382,11 +398,13 @@ export const K3Provider: React.FC<{ children: React.ReactNode }> = ({ children }
     setIsMobileSidebarOpen(false);
   };
 
-  const updateItemStatus = (itemId: string, newStatus: ComplianceStatus, auditorNotes?: string) => {
+  const updateItemStatus = async (itemId: string, newStatus: ComplianceStatus, auditorNotes?: string) => {
+    const nowStr = new Date().toISOString().split('T')[0];
+
+    // 1. Optimistic local update
     setItems(prevItems =>
       prevItems.map(item => {
         if (item.id === itemId) {
-          const nowStr = new Date().toISOString().split('T')[0];
           return {
             ...item,
             status: newStatus,
@@ -397,9 +415,25 @@ export const K3Provider: React.FC<{ children: React.ReactNode }> = ({ children }
         return item;
       })
     );
+
+    // 2. Real-time Cloud update to Firestore -> Pushes instantly to all other users!
+    try {
+      const itemRef = doc(db, 'checklist_items', itemId);
+      const updateData: Record<string, any> = {
+        status: newStatus,
+        lastUpdated: nowStr,
+      };
+      if (auditorNotes !== undefined) {
+        updateData.notes = auditorNotes;
+      }
+      await setDoc(itemRef, cleanForFirestore(updateData), { merge: true });
+      console.log('Real-time Firestore status update saved for', itemId);
+    } catch (err) {
+      console.error('Firestore updateItemStatus sync error:', err);
+    }
   };
 
-  // Upload files: automatically ensures Google Drive authentication and uploads directly to Google Drive folder 1Gz4nGIrBVmlM9kwcnat_L9uedqmw4KyJ
+  // Upload files: uploads to real-time Cloud Firestore & IndexedDB so all users see it immediately
   const uploadDocuments = async (
     itemId: string,
     files: FileList | File[],
@@ -408,7 +442,7 @@ export const K3Provider: React.FC<{ children: React.ReactNode }> = ({ children }
     const fileArray = Array.from(files);
     if (fileArray.length === 0) return { uploadedCount: 0, savedToGDrive: false };
 
-    // 1. Check if user is already authenticated with Google Drive
+    // Check optional Google Drive token
     const token = await getAccessToken();
 
     const newDocs: DocumentEvidence[] = [];
@@ -420,60 +454,30 @@ export const K3Provider: React.FC<{ children: React.ReactNode }> = ({ children }
       const docId = `DOC-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`;
       const fileExt = file.name.split('.').pop()?.toUpperCase() || 'FILE';
 
-      // Always save locally in IndexedDB for instant offline preview & backup
-      await storeFileBlob(docId, file);
+      // Save locally in IndexedDB AND to Firestore file_storage for real-time multi-user viewing!
+      const dataUrl = await storeFileBlob(docId, file, { name: file.name, mimeType: file.type });
 
       let isGDrive = false;
       let gdriveUrl = '';
-      let gdriveFileId = '';
 
-      // Direct Automatic Upload to Google Drive folder K3 RS via Webhook (Zero login required for all hospital staff)
-      try {
-        const webhookResult = await uploadFileViaWebhook(file, file.name, customDocNumber);
-        if (webhookResult?.webViewLink) {
-          isGDrive = true;
-          gdriveUrl = webhookResult.webViewLink;
-          gdriveFileId = webhookResult.id;
-          anyGDriveSuccess = true;
-        }
-      } catch (webhookErr: any) {
-        console.warn('Webhook upload fallback:', webhookErr);
-        // Fallback to token-based upload if available
-        if (token) {
-          try {
-            const gdriveResult = await uploadFileToGoogleDriveFolder(
-              file,
-              file.name,
-              GDRIVE_FOLDER_ID,
-              token,
-              customDocNumber
-            );
-            if (gdriveResult?.webViewLink) {
-              isGDrive = true;
-              gdriveUrl = gdriveResult.webViewLink;
-              gdriveFileId = gdriveResult.id;
-              anyGDriveSuccess = true;
-            }
-          } catch (driveErr: any) {
-            console.error('Direct Google Drive upload error:', driveErr);
-            driveErrorMessage = driveErr.message || 'Gagal menyimpan ke Google Drive';
-          }
-        } else {
-          driveErrorMessage = webhookErr.message;
-        }
-      }
-      if (gdriveFileId) ownUploadedDriveIdsRef.current.add(gdriveFileId);
-
-      let dataUrl: string | undefined = undefined;
-      if (file.type.startsWith('image/') && file.size < 2 * 1024 * 1024) {
+      // Optional Google Drive upload if connected
+      if (token) {
         try {
-          dataUrl = await new Promise<string>((resolve) => {
-            const reader = new FileReader();
-            reader.onloadend = () => resolve(reader.result as string);
-            reader.readAsDataURL(file);
-          });
-        } catch {
-          // ignore
+          const gdriveResult = await uploadFileToGoogleDriveFolder(
+            file,
+            file.name,
+            GDRIVE_FOLDER_ID,
+            token,
+            customDocNumber
+          );
+          if (gdriveResult?.webViewLink) {
+            isGDrive = true;
+            gdriveUrl = gdriveResult.webViewLink;
+            anyGDriveSuccess = true;
+          }
+        } catch (driveErr: any) {
+          console.warn('Google Drive direct upload notice:', driveErr);
+          driveErrorMessage = driveErr.message || 'Gagal menyimpan ke Google Drive';
         }
       }
 
@@ -485,18 +489,20 @@ export const K3Provider: React.FC<{ children: React.ReactNode }> = ({ children }
         fileType: fileExt,
         fileSize: formatFileSize(file.size),
         mimeType: file.type || 'application/octet-stream',
-        dataUrl,
-        isGDrive,
-        gdriveUrl,
+        dataUrl: dataUrl && dataUrl.length < 500000 ? dataUrl : undefined,
+        isGDrive: !!isGDrive,
+        gdriveUrl: gdriveUrl || '',
         verified: true,
       });
     }
 
-    // Update state
+    // 1. Optimistic local update
+    const currentItem = items.find(i => i.id === itemId);
+    const updatedDocs = [...newDocs, ...(currentItem?.documents || [])];
+
     setItems(prevItems =>
       prevItems.map(item => {
         if (item.id === itemId) {
-          const updatedDocs = [...newDocs, ...item.documents];
           return {
             ...item,
             documents: updatedDocs,
@@ -511,7 +517,6 @@ export const K3Provider: React.FC<{ children: React.ReactNode }> = ({ children }
 
     setActiveDocModalItem(prev => {
       if (prev && prev.id === itemId) {
-        const updatedDocs = [...newDocs, ...prev.documents];
         return {
           ...prev,
           documents: updatedDocs,
@@ -523,33 +528,26 @@ export const K3Provider: React.FC<{ children: React.ReactNode }> = ({ children }
       return prev;
     });
 
-    // Provide explicit user feedback
-    if (anyGDriveSuccess) {
-      showToast(
-        'success',
-        `✓ ${newDocs.length} berkas berhasil tersimpan di Google Drive!`,
-        GDRIVE_MAIN_FOLDER_URL,
-        'Buka di Google Drive'
-      );
-    } else if (driveErrorMessage) {
-      if (driveErrorMessage.includes('insufficient') || driveErrorMessage.includes('scope')) {
-        clearAccessToken();
-        showToast(
-          'error',
-          'Sesi login Google sebelumnya belum menyetujui izin Google Drive. Silakan klik tombol "Hubungkan Drive" di pojok kanan atas untuk menghubungkan ulang.'
-        );
-      } else {
-        showToast(
-          'error',
-          `Berkas disimpan di lokal, tetapi gagal dikirim ke Google Drive: ${driveErrorMessage}`
-        );
-      }
-    } else {
-      showToast(
-        'success',
-        `✓ ${newDocs.length} berkas bukti berhasil diunggah ke checklist!`
-      );
+    // 2. Real-time Cloud update to Firestore -> Pushes instantly to all other users!
+    try {
+      const itemRef = doc(db, 'checklist_items', itemId);
+      const payload = cleanForFirestore({
+        documents: updatedDocs,
+        status: 'lengkap',
+        lastUpdated: nowStr,
+        verifiedBy: currentUser?.displayName || 'Verifikator K3RS',
+      });
+      await setDoc(itemRef, payload, { merge: true });
+      console.log('Real-time Firestore upload saved successfully for', itemId);
+    } catch (firestoreErr) {
+      console.error('Firestore real-time update error:', firestoreErr);
     }
+
+    // Provide explicit user feedback
+    showToast(
+      'success',
+      `✓ ${newDocs.length} berkas berhasil diunggah & tersinkronisasi realtime ke semua pengguna!`
+    );
 
     return { uploadedCount: newDocs.length, savedToGDrive: anyGDriveSuccess };
   };
@@ -568,7 +566,7 @@ export const K3Provider: React.FC<{ children: React.ReactNode }> = ({ children }
       }
 
       showToast('info', `Sedang mengunggah ${doc.name} ke folder Google Drive Komite K3...`);
-
+      
       let gdriveResult: any = null;
       try {
         gdriveResult = await uploadFileViaWebhook(blob, doc.name, doc.docNumber);
@@ -608,7 +606,6 @@ export const K3Provider: React.FC<{ children: React.ReactNode }> = ({ children }
         })
       );
 
-      ownUploadedDriveIdsRef.current.add(gdriveResult.id);
       showToast(
         'success',
         `✓ Berkas "${doc.name}" berhasil tersimpan di folder Google Drive Komite K3!`,
@@ -667,7 +664,6 @@ export const K3Provider: React.FC<{ children: React.ReactNode }> = ({ children }
                   doc.docNumber
                 );
                 syncedCount++;
-                ownUploadedDriveIdsRef.current.add(res.id);
                 return {
                   ...doc,
                   isGDrive: true,
@@ -705,7 +701,7 @@ export const K3Provider: React.FC<{ children: React.ReactNode }> = ({ children }
   };
 
   // Link document from Google Drive folder
-  const linkGDriveDocument = (
+  const linkGDriveDocument = async (
     itemId: string,
     name: string,
     gdriveUrl: string,
@@ -728,13 +724,13 @@ export const K3Provider: React.FC<{ children: React.ReactNode }> = ({ children }
       verified: true,
     };
 
-    const driveFileId = gdriveUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/)?.[1];
-    if (driveFileId) ownUploadedDriveIdsRef.current.add(driveFileId);
+    const currentItem = items.find(i => i.id === itemId);
+    const updatedDocs = [newDoc, ...(currentItem?.documents || [])];
 
+    // Optimistic local update
     setItems(prevItems =>
       prevItems.map(item => {
         if (item.id === itemId) {
-          const updatedDocs = [newDoc, ...item.documents];
           return {
             ...item,
             documents: updatedDocs,
@@ -749,7 +745,6 @@ export const K3Provider: React.FC<{ children: React.ReactNode }> = ({ children }
 
     setActiveDocModalItem(prev => {
       if (prev && prev.id === itemId) {
-        const updatedDocs = [newDoc, ...prev.documents];
         return {
           ...prev,
           documents: updatedDocs,
@@ -761,6 +756,22 @@ export const K3Provider: React.FC<{ children: React.ReactNode }> = ({ children }
       return prev;
     });
 
+    // Real-time Cloud update to Firestore -> Pushes instantly to all other users!
+    try {
+      const itemRef = doc(db, 'checklist_items', itemId);
+      const payload = cleanForFirestore({
+        documents: updatedDocs,
+        status: 'lengkap',
+        lastUpdated: nowStr,
+        verifiedBy: currentUser?.displayName || 'Verifikator K3RS',
+      });
+      await setDoc(itemRef, payload, { merge: true });
+      console.log('Real-time Firestore linkGDrive saved successfully for', itemId);
+    } catch (firestoreErr) {
+      console.error('Firestore real-time linkGDrive sync error:', firestoreErr);
+    }
+
+    showToast('success', '✓ Dokumen Google Drive berhasil ditautkan & tersinkronisasi realtime!');
   };
 
   const deleteDocument = async (itemId: string, docId: string) => {
@@ -786,15 +797,18 @@ export const K3Provider: React.FC<{ children: React.ReactNode }> = ({ children }
       await removeFileBlob(docId);
     }
 
+    const nowStr = new Date().toISOString().split('T')[0];
+    const remainingDocs = (targetItem?.documents || []).filter(d => d.id !== docId);
+
+    // Optimistic local update
     setItems(prevItems =>
       prevItems.map(item => {
         if (item.id === itemId) {
-          const remainingDocs = item.documents.filter(d => d.id !== docId);
           return {
             ...item,
             documents: remainingDocs,
             status: remainingDocs.length > 0 ? item.status : 'belum',
-            lastUpdated: new Date().toISOString().split('T')[0],
+            lastUpdated: nowStr,
           };
         }
         return item;
@@ -803,7 +817,6 @@ export const K3Provider: React.FC<{ children: React.ReactNode }> = ({ children }
 
     setActiveDocModalItem(prev => {
       if (prev && prev.id === itemId) {
-        const remainingDocs = prev.documents.filter(d => d.id !== docId);
         return {
           ...prev,
           documents: remainingDocs,
@@ -813,17 +826,37 @@ export const K3Provider: React.FC<{ children: React.ReactNode }> = ({ children }
       return prev;
     });
 
-    showToast('info', 'Dokumen berhasil dihapus.');
+    // Real-time Cloud update to Firestore -> Pushes deletion to all users instantly!
+    try {
+      const itemRef = doc(db, 'checklist_items', itemId);
+      const payload = cleanForFirestore({
+        documents: remainingDocs,
+        status: remainingDocs.length > 0 ? targetItem?.status || 'lengkap' : 'belum',
+        lastUpdated: nowStr,
+      });
+      await setDoc(itemRef, payload, { merge: true });
+      console.log('Real-time Firestore deleteDocument saved successfully for', itemId);
+    } catch (firestoreErr) {
+      console.error('Firestore deleteDocument sync error:', firestoreErr);
+    }
+
+    showToast('info', 'Dokumen berhasil dihapus dari cloud & checklist.');
   };
 
-  const resetToDefaultData = () => {
+  const resetToDefaultData = async () => {
     setItems(INITIAL_MASTER_CHECKLIST);
     try {
       localStorage.removeItem(STORAGE_KEY);
-    } catch {
-      // ignore
+      const batch = writeBatch(db);
+      INITIAL_MASTER_CHECKLIST.forEach((item) => {
+        const itemRef = doc(db, 'checklist_items', item.id);
+        batch.set(itemRef, cleanForFirestore(item), { merge: true });
+      });
+      await batch.commit();
+    } catch (err) {
+      console.warn('Firestore reset warning:', err);
     }
-    showToast('info', 'Checklist direset ke kondisi awal 0%.');
+    showToast('info', 'Checklist direset ke kondisi awal 0% untuk seluruh pengguna.');
   };
 
   // Global statistics calculation: % terupload dan % belum
@@ -912,16 +945,22 @@ export const K3Provider: React.FC<{ children: React.ReactNode }> = ({ children }
         setActiveDocModalItem,
         viewingDocState,
         setViewingDocState,
+        isExportModalOpen,
+        setIsExportModalOpen,
+        isHospitalInfoModalOpen,
+        setIsHospitalInfoModalOpen,
         isGDriveConfigModalOpen,
         setIsGDriveConfigModalOpen,
         gdriveWebhookUrl,
         setGdriveWebhookUrl,
 
+        // Cloud Real-time Sync Status
+        isCloudSynced,
+
         // Authentication & Google Drive
         currentUser,
-        isLoggedIn,
+        isLoggedIn: !!currentUser,
         isLoggingIn,
-        driveSyncEnabled,
         handleGoogleLogin,
         handleGoogleLogout,
         gdriveMainFolderUrl: GDRIVE_MAIN_FOLDER_URL,

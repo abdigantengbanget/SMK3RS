@@ -1,0 +1,33 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128;
+    }
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Shared SMK3RS Checklist Items for RS Semen Gresik
+    match /checklist_items/{itemId} {
+      allow read: if true;
+      allow create, update: if isValidId(itemId) &&
+        request.resource.data.id is string &&
+        request.resource.data.title is string;
+      allow delete: if isValidId(itemId);
+    }
+
+    // Shared document evidence file payload for multi-user preview
+    match /file_storage/{docId} {
+      allow read: if true;
+      allow create, update: if isValidId(docId) &&
+        request.resource.data.docId is string &&
+        request.resource.data.name is string;
+      allow delete: if isValidId(docId);
+    }
+  }
+}

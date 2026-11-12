@@ -1,0 +1,95 @@
+{
+  "entities": {
+    "ChecklistItem": {
+      "title": "ChecklistItem",
+      "description": "Master SMK3RS checklist item with uploaded documents and status shared across hospital users",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier of the checklist item"
+        },
+        "moduleId": {
+          "type": "string",
+          "description": "The module identifier such as K3-KESELAMATAN or K3-B3"
+        },
+        "standardNumber": {
+          "type": "string",
+          "description": "Standard number code like 3.1.1 or KK.1"
+        },
+        "title": {
+          "type": "string",
+          "description": "Title of the requirement"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["lengkap", "proses", "belum"],
+          "description": "Compliance status"
+        },
+        "isSectionHeader": {
+          "type": "boolean",
+          "description": "Whether this item is a section header"
+        },
+        "description": {
+          "type": "string",
+          "description": "Detailed explanation of requirement"
+        },
+        "notes": {
+          "type": "string",
+          "description": "Auditor or internal notes"
+        },
+        "lastUpdated": {
+          "type": "string",
+          "description": "ISO date of last update"
+        },
+        "verifiedBy": {
+          "type": "string",
+          "description": "Name or email of verifier"
+        },
+        "documents": {
+          "type": "array",
+          "description": "List of attached document evidence metadata"
+        }
+      },
+      "required": ["id", "moduleId", "standardNumber", "title", "status"]
+    },
+    "FileBlob": {
+      "title": "FileBlob",
+      "description": "File payload for viewing uploaded evidence across devices and users",
+      "type": "object",
+      "properties": {
+        "docId": {
+          "type": "string",
+          "description": "Document evidence ID"
+        },
+        "name": {
+          "type": "string",
+          "description": "File name"
+        },
+        "mimeType": {
+          "type": "string",
+          "description": "MIME type"
+        },
+        "dataUrl": {
+          "type": "string",
+          "description": "Data URL base64 content"
+        },
+        "uploadedAt": {
+          "type": "string",
+          "description": "Upload timestamp"
+        }
+      },
+      "required": ["docId", "name", "mimeType", "dataUrl"]
+    }
+  },
+  "firestore": {
+    "/checklist_items/{itemId}": {
+      "schema": "ChecklistItem",
+      "description": "Shared real-time checklist items for RS Semen Gresik K3RS dashboard"
+    },
+    "/file_storage/{docId}": {
+      "schema": "FileBlob",
+      "description": "Shared document payloads for hospital staff viewing"
+    }
+  }
+}
