@@ -26,6 +26,7 @@ import {
   uploadFileToGoogleDriveFolder,
   uploadFileViaWebhook,
   deleteFileFromGoogleDrive,
+  extractGoogleDriveFileId,
 } from '../services/gdriveService';
 
 export const GDRIVE_MAIN_FOLDER_URL =
@@ -465,6 +466,9 @@ export const K3Provider: React.FC<{ children: React.ReactNode }> = ({ children }
         anyGDriveSuccess = true;
       }
 
+      const detectedFileId =
+        gdriveResult?.id || extractGoogleDriveFileId(gdriveUrl) || undefined;
+
       newDocs.push({
         id: docId,
         name: file.name,
@@ -476,6 +480,7 @@ export const K3Provider: React.FC<{ children: React.ReactNode }> = ({ children }
         dataUrl: dataUrl && dataUrl.length < 500000 ? dataUrl : undefined,
         isGDrive: !!isGDrive,
         gdriveUrl: gdriveUrl || '',
+        gdriveFileId: detectedFileId,
         verified: true,
       });
     }
@@ -729,6 +734,7 @@ export const K3Provider: React.FC<{ children: React.ReactNode }> = ({ children }
       fileSize: 'Google Drive',
       isGDrive: true,
       gdriveUrl: gdriveUrl.trim(),
+      gdriveFileId: extractGoogleDriveFileId(gdriveUrl.trim()) || undefined,
       verified: true,
     };
 
@@ -861,18 +867,22 @@ export const K3Provider: React.FC<{ children: React.ReactNode }> = ({ children }
     }
 
     // 5. Delete in Google Drive if ID can be found
-    if (targetDoc?.isGDrive && targetDoc.gdriveUrl) {
-      const match = targetDoc.gdriveUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
-      if (match && match[1]) {
+    if (targetDoc?.isGDrive && (targetDoc.gdriveFileId || targetDoc.gdriveUrl)) {
+      const gdriveFileId =
+        targetDoc.gdriveFileId ||
+        extractGoogleDriveFileId(targetDoc.gdriveUrl || '');
+      if (gdriveFileId) {
         getAccessToken()
           .then((token) => {
-            if (token) {
-              deleteFileFromGoogleDrive(match[1], token).catch((err) => {
-                console.warn('Google Drive delete remote notice:', err);
-              });
-            }
+            deleteFileFromGoogleDrive(gdriveFileId, token).catch((err) => {
+              console.warn('Google Drive delete remote notice:', err);
+            });
           })
-          .catch(() => {});
+          .catch(() => {
+            deleteFileFromGoogleDrive(gdriveFileId, null).catch((err) => {
+              console.warn('Google Drive delete remote notice:', err);
+            });
+          });
       }
     }
   };

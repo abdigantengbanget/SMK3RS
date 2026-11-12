@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import {
   X,
   FolderOpen,
@@ -12,8 +12,12 @@ import {
   LogOut,
   Loader2,
   CheckCircle2,
-} from 'lucide-react';
-import { useK3, GDRIVE_MAIN_FOLDER_URL, GDRIVE_FOLDER_ID } from '../../context/K3Context';
+} from "lucide-react";
+import {
+  useK3,
+  GDRIVE_MAIN_FOLDER_URL,
+  GDRIVE_FOLDER_ID,
+} from "../../context/K3Context";
 
 const GoogleGLogo: React.FC = () => (
   <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24">
@@ -36,10 +40,10 @@ const GoogleGLogo: React.FC = () => (
   </svg>
 );
 
-export const GDriveConfigModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
-  isOpen,
-  onClose,
-}) => {
+export const GDriveConfigModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+}> = ({ isOpen, onClose }) => {
   const {
     gdriveWebhookUrl,
     setGdriveWebhookUrl,
@@ -50,7 +54,7 @@ export const GDriveConfigModal: React.FC<{ isOpen: boolean; onClose: () => void 
     handleGoogleLogout,
   } = useK3();
 
-  const [webhookInput, setWebhookInput] = useState(gdriveWebhookUrl || '');
+  const [webhookInput, setWebhookInput] = useState(gdriveWebhookUrl || "");
   const [copied, setCopied] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
 
@@ -59,11 +63,31 @@ export const GDriveConfigModal: React.FC<{ isOpen: boolean; onClose: () => void 
   const scriptCode = `function doPost(e) {
   try {
     var data = JSON.parse(e.postData.contents);
+
+    // FITUR 1: HAPUS FILE DARI GOOGLE DRIVE
+    if (data.action === "delete" || data.action === "remove") {
+      var fileId = data.fileId || data.id;
+      if (!fileId) throw new Error("File ID tidak ditemukan");
+      var fileToDelete = DriveApp.getFileById(fileId);
+      fileToDelete.setTrashed(true); // Memindahkan file ke Sampah Drive
+      return ContentService.createTextOutput(JSON.stringify({
+        status: "success",
+        message: "File berhasil dihapus dari Google Drive",
+        fileId: fileId
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // FITUR 2: UNGGAH FILE KE GOOGLE DRIVE
     var folder = DriveApp.getFolderById("${GDRIVE_FOLDER_ID}");
     var decoded = Utilities.base64Decode(data.base64);
-    var blob = Utilities.newBlob(decoded, data.mimeType, data.name);
+    var fileName = data.fileName || data.name || "dokumen_k3rs";
+    var blob = Utilities.newBlob(decoded, data.mimeType || "application/octet-stream", fileName);
     var file = folder.createFile(blob);
-    file.setDescription("Diunggah via Dashboard K3RS RS Semen Gresik");
+    if (data.docNumber) {
+      file.setDescription("Nomor Dokumen: " + data.docNumber + " - Diunggah via Dashboard K3RS RS Semen Gresik");
+    } else {
+      file.setDescription("Diunggah via Dashboard K3RS RS Semen Gresik");
+    }
     return ContentService.createTextOutput(JSON.stringify({
       status: "success",
       fileId: file.getId(),
@@ -150,7 +174,13 @@ export const GDriveConfigModal: React.FC<{ isOpen: boolean; onClose: () => void 
               <span>Status Koneksi Akun Google Drive (Utama)</span>
             </h4>
             <p className="leading-relaxed text-slate-600">
-              Dengan login menggunakan Akun Google, setiap dokumen yang diunggah dari dashboard ini akan <strong>secara otomatis diunggah langsung ke folder Google Drive bersama</strong> di atas. Anda tidak perlu repot membuka tab Drive manual untuk memindahkan file.
+              Dengan login menggunakan Akun Google, setiap dokumen yang diunggah
+              dari dashboard ini akan{" "}
+              <strong>
+                secara otomatis diunggah langsung ke folder Google Drive bersama
+              </strong>{" "}
+              di atas. Anda tidak perlu repot membuka tab Drive manual untuk
+              memindahkan file.
             </p>
 
             {isLoggedIn && currentUser ? (
@@ -164,14 +194,16 @@ export const GDriveConfigModal: React.FC<{ isOpen: boolean; onClose: () => void 
                     />
                   ) : (
                     <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-600 font-bold text-white uppercase text-sm">
-                      {currentUser.displayName?.[0] || currentUser.email?.[0] || 'U'}
+                      {currentUser.displayName?.[0] ||
+                        currentUser.email?.[0] ||
+                        "U"}
                     </div>
                   )}
                   <div>
                     <div className="flex items-center gap-1.5">
                       <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
                       <span className="font-bold text-xs text-emerald-950">
-                        {currentUser.displayName || 'Pengguna Terverifikasi'}
+                        {currentUser.displayName || "Pengguna Terverifikasi"}
                       </span>
                     </div>
                     <span className="text-[11px] text-emerald-700 block font-mono">
@@ -199,7 +231,8 @@ export const GDriveConfigModal: React.FC<{ isOpen: boolean; onClose: () => void 
                     Belum Terhubung ke Google Drive
                   </span>
                   <span className="text-[11px] text-slate-500">
-                    Klik tombol di samping untuk mengaktifkan upload otomatis langsung ke folder K3RS
+                    Klik tombol di samping untuk mengaktifkan upload otomatis
+                    langsung ke folder K3RS
                   </span>
                 </div>
 
@@ -214,7 +247,9 @@ export const GDriveConfigModal: React.FC<{ isOpen: boolean; onClose: () => void 
                   ) : (
                     <GoogleGLogo />
                   )}
-                  <span>{isLoggingIn ? 'Menghubungkan...' : 'Masuk dengan Google'}</span>
+                  <span>
+                    {isLoggingIn ? "Menghubungkan..." : "Masuk dengan Google"}
+                  </span>
                 </button>
               </div>
             )}
@@ -227,7 +262,9 @@ export const GDriveConfigModal: React.FC<{ isOpen: boolean; onClose: () => void 
               <span>Opsi Tambahan: Google Apps Script Webhook (Opsional)</span>
             </h4>
             <p className="leading-relaxed text-slate-600">
-              Jika Anda ingin sistem menyimpan file ke Drive secara background tanpa meminta login kepada setiap staf/auditor, Anda dapat memasang skrip <em>Google Apps Script Web App</em> di bawah ini:
+              Jika Anda ingin sistem menyimpan file ke Drive secara background
+              tanpa meminta login kepada setiap staf/auditor, Anda dapat
+              memasang skrip <em>Google Apps Script Web App</em> di bawah ini:
             </p>
           </div>
 
@@ -239,10 +276,16 @@ export const GDriveConfigModal: React.FC<{ isOpen: boolean; onClose: () => void 
                 onClick={handleCopyScript}
                 className="absolute right-2.5 top-2.5 flex items-center gap-1 px-2.5 py-1 rounded bg-slate-800 text-white text-[10px] font-semibold hover:bg-slate-700 transition-colors"
               >
-                {copied ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
-                <span>{copied ? 'Tersalin' : 'Salin Skrip'}</span>
+                {copied ? (
+                  <Check className="h-3 w-3 text-emerald-400" />
+                ) : (
+                  <Copy className="h-3 w-3" />
+                )}
+                <span>{copied ? "Tersalin" : "Salin Skrip"}</span>
               </button>
-              <pre className="pr-20 text-[10.5px] leading-relaxed">{scriptCode}</pre>
+              <pre className="pr-20 text-[10.5px] leading-relaxed">
+                {scriptCode}
+              </pre>
             </div>
           </div>
 

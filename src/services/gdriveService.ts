@@ -133,23 +133,81 @@ export async function uploadFileToGoogleDriveFolder(
   };
 }
 
+export function extractGoogleDriveFileId(url: string): string | null {
+  if (!url) return null;
+  const matchD = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+  if (matchD && matchD[1]) return matchD[1];
+  const matchId = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  if (matchId && matchId[1]) return matchId[1];
+  const matchOpen = url.match(/\/open\?id=([a-zA-Z0-9_-]+)/);
+  if (matchOpen && matchOpen[1]) return matchOpen[1];
+  return null;
+}
+
+/**
+ * Deletes or trashes a file in Google Drive via Apps Script Webhook
+ */
+export async function deleteFileViaWebhook(fileId: string): Promise<boolean> {
+  if (!fileId) return false;
+  try {
+    const payload = JSON.stringify({
+      action: 'delete',
+      fileId: fileId,
+      id: fileId,
+    });
+
+    const response = await fetch(GDRIVE_WEBHOOK_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'text/plain;charset=utf-8',
+      },
+      body: payload,
+    });
+
+    const text = await response.text();
+    try {
+      const data = JSON.parse(text);
+      if (data.status === 'success') {
+        console.log('File successfully deleted from Google Drive via Webhook:', fileId);
+        return true;
+      }
+    } catch {
+      // ignore
+    }
+  } catch (err) {
+    console.warn('Google Drive webhook delete attempt warning:', err);
+  }
+  return false;
+}
+
 export async function deleteFileFromGoogleDrive(
   fileId: string,
-  accessToken: string
+  accessToken?: string | null
 ): Promise<void> {
-  const response = await fetch(
-    `https://www.googleapis.com/drive/v3/files/${fileId}?supportsAllDrives=true`,
-    {
-      method: 'DELETE',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
-    }
-  );
+  if (!fileId) return;
 
-  if (!response.ok && response.status !== 404) {
-    const err = await response.text();
-    console.error('Google Drive Delete Error:', err);
-    throw new Error(`Gagal menghapus file di Google Drive: ${response.statusText}`);
+  // 1. Try Direct Google Drive REST API if user is authenticated with Google OAuth
+  if (accessToken) {
+    try {
+      const response = await fetch(
+        `https://www.googleapis.com/drive/v3/files/${fileId}?supportsAllDrives=true`,
+        {
+          method: 'DELETE',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        }
+      );
+
+      if (response.ok || response.status === 404) {
+        console.log('File successfully deleted from Google Drive via OAuth API:', fileId);
+        return;
+      }
+    } catch (err) {
+      console.warn('Google Drive OAuth delete warning:', err);
+    }
   }
+
+  // 2. Also send delete command to Webhook
+  await deleteFileViaWebhook(fileId);
 }

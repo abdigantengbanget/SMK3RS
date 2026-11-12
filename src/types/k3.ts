@@ -26,6 +26,7 @@ export interface DocumentEvidence {
   dataUrl?: string; // base64 preview for images/small docs
   isGDrive?: boolean;
   gdriveUrl?: string;
+  gdriveFileId?: string;
   verified?: boolean;
 }
 
