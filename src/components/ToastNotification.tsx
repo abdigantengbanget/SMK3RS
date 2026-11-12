@@ -1,94 +1,60 @@
-import React from 'react';
-import {
-  Menu,
-  ChevronRight,
-} from 'lucide-react';
-import { useK3 } from '../context/K3Context';
-import { OFFICIAL_SIDEBAR_MENUS } from '../data/menuConfig';
+import React from "react";
+import { CheckCircle2, AlertCircle, Info, ExternalLink, X } from "lucide-react";
+import { useK3 } from "../context/K3Context";
 
-export const TopNavbar: React.FC = () => {
-  const {
-    activeModuleId,
-    setActiveModuleId,
-    setIsMobileSidebarOpen,
-    isCloudSynced,
-  } = useK3();
+export const ToastNotification: React.FC = () => {
+  const { toast, dismissToast } = useK3();
 
-  const isRingkasan = activeModuleId === 'RINGKASAN';
-  const currentMenu =
-    OFFICIAL_SIDEBAR_MENUS.find((m) => m.id === activeModuleId) || OFFICIAL_SIDEBAR_MENUS[0];
+  if (!toast) return null;
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between gap-4 border-b border-slate-200/80 bg-white/95 px-4 sm:px-6 lg:px-8 backdrop-blur-md">
-      {/* Left: Mobile Toggle + Breadcrumb & Active Page Title */}
-      <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-        <button
-          onClick={() => setIsMobileSidebarOpen(true)}
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 hover:text-slate-900 shadow-2xs transition-colors lg:hidden"
-          aria-label="Buka Menu Navigasi"
-        >
-          <Menu className="h-5 w-5" />
-        </button>
+    <div className="fixed bottom-5 right-5 z-50 max-w-md animate-in fade-in slide-in-from-bottom-5 duration-200">
+      <div
+        className={`flex items-start gap-3 p-4 rounded-2xl shadow-xl border ${
+          toast.type === "success"
+            ? "bg-emerald-950 text-emerald-50 border-emerald-700/80 shadow-emerald-950/20"
+            : toast.type === "error"
+              ? "bg-rose-950 text-rose-50 border-rose-700/80 shadow-rose-950/20"
+              : "bg-slate-900 text-slate-50 border-slate-700/80 shadow-slate-950/20"
+        }`}
+      >
+        <div className="shrink-0 mt-0.5">
+          {toast.type === "success" && (
+            <CheckCircle2 className="h-5 w-5 text-emerald-400" />
+          )}
+          {toast.type === "error" && (
+            <AlertCircle className="h-5 w-5 text-rose-400" />
+          )}
+          {toast.type === "info" && <Info className="h-5 w-5 text-blue-400" />}
+        </div>
 
-        <div className="flex flex-col min-w-0 justify-center">
-          {/* Breadcrumb row */}
-          <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-[11px] text-slate-400 font-medium leading-none mb-1">
-            <button
-              onClick={() => setActiveModuleId('RINGKASAN')}
-              className="hover:text-teal-700 transition-colors"
+        <div className="flex-1 min-w-0 space-y-2">
+          <p className="text-xs sm:text-sm font-medium leading-relaxed">
+            {toast.message}
+          </p>
+          {toast.actionUrl && (
+            <a
+              href={toast.actionUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-xs font-bold underline text-teal-300 hover:text-teal-200 transition-colors"
             >
-              Dashboard
-            </button>
-            {!isRingkasan && (
-              <>
-                <ChevronRight className="h-3 w-3 text-slate-300 shrink-0" />
-                <span className="text-slate-400 hidden sm:inline">Modul K3</span>
-                <ChevronRight className="h-3 w-3 text-slate-300 shrink-0 hidden sm:inline" />
-                <span className="font-semibold text-teal-700 truncate">
-                  {currentMenu.id}
-                </span>
-              </>
-            )}
-          </nav>
-
-          {/* Prominent Page Title */}
-          <div className="flex items-center gap-2 min-w-0">
-            <h1 className="text-base sm:text-lg font-extrabold text-slate-900 tracking-tight truncate leading-tight">
-              {isRingkasan ? 'Ringkasan & Kepatuhan SMK3RS' : currentMenu.name}
-            </h1>
-            {!isRingkasan && currentMenu.checklistMapping && (
-              <span className="hidden md:inline-flex text-[10px] font-bold px-2 py-0.5 rounded-md bg-teal-50 text-teal-800 border border-teal-200/80 shrink-0">
-                {currentMenu.checklistMapping}
-              </span>
-            )}
-          </div>
+              <span>{toast.actionLabel || "Buka Tautan"}</span>
+              <ExternalLink className="h-3 w-3" />
+            </a>
+          )}
         </div>
-      </div>
 
-      {/* Right Controls: Real-time Cloud Status & Actions */}
-      <div className="flex items-center gap-2 shrink-0">
-        {/* Real-time Cloud Sync Badge */}
-        <div
-          className={`hidden sm:inline-flex items-center gap-1.5 h-9 px-2.5 rounded-xl border text-[11px] font-semibold transition-colors ${
-            isCloudSynced
-              ? 'border-emerald-200 bg-emerald-50/80 text-emerald-800'
-              : 'border-slate-200 bg-slate-50 text-slate-500'
-          }`}
-          title={isCloudSynced ? 'Tersinkronisasi Realtime dengan Cloud Firestore' : 'Menghubungkan ke Cloud...'}
+        <button
+          onClick={dismissToast}
+          className="shrink-0 p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+          aria-label="Tutup pemberitahuan"
         >
-          <span className="relative flex h-2 w-2">
-            {isCloudSynced && (
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-            )}
-            <span
-              className={`relative inline-flex rounded-full h-2 w-2 ${
-                isCloudSynced ? 'bg-emerald-500' : 'bg-slate-400'
-              }`}
-            />
-          </span>
-          <span className="hidden md:inline">{isCloudSynced ? 'Realtime' : 'Menghubungkan...'}</span>
-        </div>
+          <X className="h-4 w-4" />
+        </button>
       </div>
-    </header>
+    </div>
   );
 };
+
+export default ToastNotification;

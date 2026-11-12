@@ -3,19 +3,19 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React from 'react';
-import { K3Provider, useK3 } from './context/K3Context';
-import { Sidebar } from './components/Sidebar';
-import { TopNavbar } from './components/TopNavbar';
-import { RingkasanView } from './components/modules/RingkasanView';
-import { ModuleChecklistView } from './components/modules/ModuleChecklistView';
-import { ManageDocModal } from './components/modals/ManageDocModal';
-import { DocViewerModal } from './components/modals/DocViewerModal';
-import { ExportModal } from './components/modals/ExportModal';
-import { HospitalInfoModal } from './components/modals/HospitalInfoModal';
-import { GDriveConfigModal } from './components/modals/GDriveConfigModal';
-import { ToastNotification } from './components/ToastNotification';
-import { ShieldCheck, ExternalLink } from 'lucide-react';
+import React from "react";
+import { K3Provider, useK3 } from "./context/K3Context";
+import { Sidebar } from "./components/Sidebar";
+import { TopNavbar } from "./components/TopNavbar";
+import { RingkasanView } from "./components/modules/RingkasanView";
+import { ModuleChecklistView } from "./components/modules/ModuleChecklistView";
+import { ManageDocModal } from "./components/modals/ManageDocModal";
+import { DocViewerModal } from "./components/modals/DocViewerModal";
+import { ExportModal } from "./components/modals/ExportModal";
+import { HospitalInfoModal } from "./components/modals/HospitalInfoModal";
+import { GDriveConfigModal } from "./components/modals/GDriveConfigModal";
+import ToastNotification from "./components/ToastNotification";
+import { ShieldCheck, ExternalLink } from "lucide-react";
 
 const MainLayout: React.FC = () => {
   const {
@@ -39,7 +39,7 @@ const MainLayout: React.FC = () => {
 
         {/* Dynamic Module Content */}
         <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto">
-          {activeModuleId === 'RINGKASAN' ? (
+          {activeModuleId === "RINGKASAN" ? (
             <RingkasanView />
           ) : (
             <ModuleChecklistView moduleId={activeModuleId} />
@@ -52,10 +52,13 @@ const MainLayout: React.FC = () => {
             <div className="flex items-center gap-2">
               <ShieldCheck className="h-4 w-4 text-teal-600" />
               <span className="font-semibold text-slate-700">
-                Sistem Manajemen Keselamatan dan Kesehatan Kerja Rumah Sakit (SMK3RS)
+                Sistem Manajemen Keselamatan dan Kesehatan Kerja Rumah Sakit
+                (SMK3RS)
               </span>
               <span className="hidden sm:inline">·</span>
-              <span className="hidden sm:inline text-slate-500">RS Semen Gresik</span>
+              <span className="hidden sm:inline text-slate-500">
+                RS Semen Gresik
+              </span>
             </div>
 
             <div className="flex items-center gap-4 text-[11px] text-slate-400">
