@@ -433,25 +433,36 @@ export const K3Provider: React.FC<{ children: React.ReactNode }> = ({ children }
       let isGDrive = false;
       let gdriveUrl = '';
 
-      // Optional Google Drive upload if connected
+      // Google Drive Upload: Try OAuth token first, then fallback to direct Apps Script Webhook
+      let gdriveResult: any = null;
       if (token) {
         try {
-          const gdriveResult = await uploadFileToGoogleDriveFolder(
+          gdriveResult = await uploadFileToGoogleDriveFolder(
             file,
             file.name,
             GDRIVE_FOLDER_ID,
             token,
             customDocNumber
           );
-          if (gdriveResult?.webViewLink) {
-            isGDrive = true;
-            gdriveUrl = gdriveResult.webViewLink;
-            anyGDriveSuccess = true;
-          }
-        } catch (driveErr: any) {
-          console.warn('Google Drive direct upload notice:', driveErr);
-          driveErrorMessage = driveErr.message || 'Gagal menyimpan ke Google Drive';
+        } catch (tokenErr) {
+          console.warn('OAuth direct upload notice, falling back to webhook:', tokenErr);
         }
+      }
+
+      // If token not present or direct upload failed, use Webhook (direct to Komite K3 folder)
+      if (!gdriveResult) {
+        try {
+          gdriveResult = await uploadFileViaWebhook(file, file.name, customDocNumber);
+        } catch (webhookErr: any) {
+          console.warn('Google Drive webhook upload notice:', webhookErr);
+          driveErrorMessage = webhookErr.message || 'Gagal menyimpan ke Google Drive';
+        }
+      }
+
+      if (gdriveResult?.webViewLink) {
+        isGDrive = true;
+        gdriveUrl = gdriveResult.webViewLink;
+        anyGDriveSuccess = true;
       }
 
       newDocs.push({
@@ -519,7 +530,11 @@ export const K3Provider: React.FC<{ children: React.ReactNode }> = ({ children }
     // Provide explicit user feedback
     showToast(
       'success',
-      `✓ ${newDocs.length} berkas berhasil diunggah & tersinkronisasi realtime ke semua pengguna!`
+      anyGDriveSuccess
+        ? `✓ ${newDocs.length} berkas berhasil tersimpan di Google Drive Komite K3 & tersinkron realtime!`
+        : `✓ ${newDocs.length} berkas berhasil diunggah & tersinkronisasi realtime ke semua pengguna!`,
+      anyGDriveSuccess ? GDRIVE_MAIN_FOLDER_URL : undefined,
+      anyGDriveSuccess ? 'Buka Google Drive' : undefined
     );
 
     return { uploadedCount: newDocs.length, savedToGDrive: anyGDriveSuccess };
@@ -604,18 +619,12 @@ export const K3Provider: React.FC<{ children: React.ReactNode }> = ({ children }
           setCurrentUser(signResult.user);
         }
       } catch {
-        showToast('error', 'Login Google diperlukan untuk sinkronisasi Google Drive.');
-        return 0;
+        // Will continue with webhook fallback
       }
     }
 
-    if (!token) {
-      showToast('error', 'Token Google Drive tidak tersedia.');
-      return 0;
-    }
-
     let syncedCount = 0;
-    showToast('info', 'Memulai sinkronisasi seluruh berkas ke folder Google Drive...');
+    showToast('info', 'Memulai sinkronisasi seluruh berkas ke folder Google Drive Komite K3...');
 
     const updatedItems = await Promise.all(
       items.map(async (item) => {
@@ -625,23 +634,35 @@ export const K3Provider: React.FC<{ children: React.ReactNode }> = ({ children }
 
         const updatedDocs = await Promise.all(
           item.documents.map(async (doc) => {
-            if (doc.isGDrive) return doc;
+            if (doc.isGDrive && doc.gdriveUrl) return doc;
             try {
               const blob = await getFileBlob(doc.id);
               if (blob) {
-                const res = await uploadFileToGoogleDriveFolder(
-                  blob,
-                  doc.name,
-                  GDRIVE_FOLDER_ID,
-                  token!,
-                  doc.docNumber
-                );
-                syncedCount++;
-                return {
-                  ...doc,
-                  isGDrive: true,
-                  gdriveUrl: res.webViewLink,
-                };
+                let res: any = null;
+                if (token) {
+                  try {
+                    res = await uploadFileToGoogleDriveFolder(
+                      blob,
+                      doc.name,
+                      GDRIVE_FOLDER_ID,
+                      token,
+                      doc.docNumber
+                    );
+                  } catch (err) {
+                    console.warn(`OAuth token upload failed for ${doc.name}, trying webhook:`, err);
+                  }
+                }
+                if (!res) {
+                  res = await uploadFileViaWebhook(blob, doc.name, doc.docNumber);
+                }
+                if (res?.webViewLink) {
+                  syncedCount++;
+                  return {
+                    ...doc,
+                    isGDrive: true,
+                    gdriveUrl: res.webViewLink,
+                  };
+                }
               }
             } catch (err) {
               console.warn(`Sync failed for ${doc.name}:`, err);
@@ -658,6 +679,20 @@ export const K3Provider: React.FC<{ children: React.ReactNode }> = ({ children }
     );
 
     setItems(updatedItems);
+
+    // Persist updated GDrive links to Firestore
+    try {
+      const batch = writeBatch(db);
+      updatedItems.forEach((item) => {
+        if (!targetModuleId || item.moduleId === targetModuleId) {
+          const itemRef = doc(db, 'checklist_items', item.id);
+          batch.set(itemRef, cleanForFirestore(item), { merge: true });
+        }
+      });
+      await batch.commit();
+    } catch (firestoreErr) {
+      console.warn('Batch Firestore update after GDrive sync notice:', firestoreErr);
+    }
 
     if (syncedCount > 0) {
       showToast(
