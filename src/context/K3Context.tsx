@@ -789,29 +789,10 @@ export const K3Provider: React.FC<{ children: React.ReactNode }> = ({ children }
         : items.find((i) => i.id === itemId);
     const targetDoc = currentItem?.documents.find((d) => d.id === docId);
 
-    // Delete in Google Drive if ID can be found
-    if (targetDoc?.isGDrive && targetDoc.gdriveUrl) {
-      const match = targetDoc.gdriveUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
-      if (match && match[1]) {
-        try {
-          const token = await getAccessToken();
-          if (token) {
-            await deleteFileFromGoogleDrive(match[1], token);
-          }
-        } catch (err) {
-          console.warn('Google Drive delete remote notice:', err);
-        }
-      }
-    }
-
-    if (!docId.startsWith('GDRIVE-')) {
-      await removeFileBlob(docId);
-    }
-
     const nowStr = new Date().toISOString().split('T')[0];
     const remainingDocs = (currentItem?.documents || []).filter((d) => d.id !== docId);
 
-    // Optimistic local update
+    // 1. INSTANT OPTIMISTIC UI UPDATE (0ms response time!)
     setItems((prevItems) =>
       prevItems.map((item) => {
         if (item.id === itemId) {
@@ -837,7 +818,12 @@ export const K3Provider: React.FC<{ children: React.ReactNode }> = ({ children }
       return prev;
     });
 
-    // Update localStorage cache immediately
+    // Close preview modal if the deleted doc was currently open
+    setViewingDocState((prev) => (prev?.doc?.id === docId ? null : prev));
+
+    showToast('info', 'Dokumen berhasil dihapus.');
+
+    // 2. Update localStorage cache immediately
     try {
       const updatedList = items.map((it) =>
         it.id === itemId
@@ -854,10 +840,11 @@ export const K3Provider: React.FC<{ children: React.ReactNode }> = ({ children }
       // ignore
     }
 
-    // Real-time Cloud update to Firestore -> Pushes deletion to all users instantly!
+    // 3. Real-time Cloud update to Firestore -> Pushes deletion to all users instantly!
     try {
       const itemRef = doc(db, 'checklist_items', itemId);
       const payload = cleanForFirestore({
+        id: itemId,
         documents: remainingDocs,
         status: remainingDocs.length > 0 ? currentItem?.status || 'lengkap' : 'belum',
         lastUpdated: nowStr,
@@ -868,7 +855,26 @@ export const K3Provider: React.FC<{ children: React.ReactNode }> = ({ children }
       console.error('Firestore deleteDocument sync error:', firestoreErr);
     }
 
-    showToast('info', 'Dokumen berhasil dihapus dari cloud & checklist.');
+    // 4. Background cleanup for local IndexedDB and Firestore blob
+    if (!docId.startsWith('GDRIVE-')) {
+      removeFileBlob(docId).catch((err) => console.warn('Blob removal notice:', err));
+    }
+
+    // 5. Delete in Google Drive if ID can be found
+    if (targetDoc?.isGDrive && targetDoc.gdriveUrl) {
+      const match = targetDoc.gdriveUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+      if (match && match[1]) {
+        getAccessToken()
+          .then((token) => {
+            if (token) {
+              deleteFileFromGoogleDrive(match[1], token).catch((err) => {
+                console.warn('Google Drive delete remote notice:', err);
+              });
+            }
+          })
+          .catch(() => {});
+      }
+    }
   };
 
   const resetToDefaultData = async () => {

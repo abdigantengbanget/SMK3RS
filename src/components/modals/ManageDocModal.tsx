@@ -476,8 +476,11 @@ export const ManageDocModal: React.FC = () => {
                     {/* Delete Button */}
                     <button
                       type="button"
-                      onClick={() => deleteDocument(activeDocModalItem.id, doc.id)}
-                      className="inline-flex items-center gap-1 p-1.5 rounded-lg border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-600 hover:text-white transition-colors"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        deleteDocument(activeDocModalItem.id, doc.id);
+                      }}
+                      className="inline-flex items-center gap-1 p-1.5 rounded-lg border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-600 hover:text-white transition-colors cursor-pointer"
                       title="Hapus Dokumen"
                     >
                       <Trash2 className="h-3.5 w-3.5" />

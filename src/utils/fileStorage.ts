@@ -71,12 +71,20 @@ async function getFromLocalIndexedDB(id: string): Promise<Blob | null> {
 async function removeFromLocalIndexedDB(id: string): Promise<void> {
   try {
     const idb = await getDB();
-    return new Promise((resolve, reject) => {
-      const transaction = idb.transaction(STORE_NAME, 'readwrite');
-      const store = transaction.objectStore(STORE_NAME);
-      const req = store.delete(id);
-      req.onsuccess = () => resolve();
-      req.onerror = () => reject(req.error);
+    return await new Promise<void>((resolve) => {
+      try {
+        const transaction = idb.transaction(STORE_NAME, 'readwrite');
+        const store = transaction.objectStore(STORE_NAME);
+        const req = store.delete(id);
+        req.onsuccess = () => resolve();
+        req.onerror = () => {
+          console.warn('IndexedDB req.onerror on delete');
+          resolve();
+        };
+      } catch (txErr) {
+        console.warn('IndexedDB transaction error on delete:', txErr);
+        resolve();
+      }
     });
   } catch (err) {
     console.warn('IndexedDB delete warning:', err);

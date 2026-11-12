@@ -402,8 +402,11 @@ export const ModuleChecklistView: React.FC<ModuleChecklistViewProps> = ({ module
 
                                 <button
                                   type="button"
-                                  onClick={() => deleteDocument(item.id, doc.id)}
-                                  className="inline-flex items-center gap-1 text-xs font-semibold text-rose-600 hover:text-rose-800 px-2 py-1 rounded-lg hover:bg-rose-50 transition-colors"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    deleteDocument(item.id, doc.id);
+                                  }}
+                                  className="inline-flex items-center gap-1 text-xs font-semibold text-rose-600 hover:text-rose-800 px-2 py-1 rounded-lg hover:bg-rose-50 transition-colors cursor-pointer"
                                   title="Hapus Dokumen"
                                 >
                                   <Trash2 className="h-3.5 w-3.5" />
