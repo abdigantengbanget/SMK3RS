@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import {
   Copy,
   FileCheck2,
@@ -18,52 +18,79 @@ import {
   BarChart3,
   ExternalLink,
   Search,
-} from 'lucide-react';
-import { useK3 } from '../../context/K3Context';
-import { OFFICIAL_SIDEBAR_MENUS } from '../../data/menuConfig';
+} from "lucide-react";
+import { useK3 } from "../../context/K3Context";
+import { OFFICIAL_SIDEBAR_MENUS } from "../../data/menuConfig";
 
-const MODULE_ICON_MAP: Record<string, { icon: React.ComponentType<{ className?: string }>; bg: string; text: string }> = {
-  'K3-KESELAMATAN': { icon: Shield, bg: 'bg-teal-50', text: 'text-teal-700' },
-  'K3-B3': { icon: FlaskConical, bg: 'bg-amber-50', text: 'text-amber-700' },
-  'K3-KEBAKARAN': { icon: Flame, bg: 'bg-rose-50', text: 'text-rose-700' },
-  'K3-UTILITAS': { icon: Wrench, bg: 'bg-blue-50', text: 'text-blue-700' },
-  'K3-ALKES': { icon: Stethoscope, bg: 'bg-indigo-50', text: 'text-indigo-700' },
-  'K3-BENCANA': { icon: AlertTriangle, bg: 'bg-orange-50', text: 'text-orange-700' },
-  'K3-KESEHATAN-KERJA': { icon: HeartPulse, bg: 'bg-red-50', text: 'text-red-700' },
-  'K3-DIKLAT': { icon: GraduationCap, bg: 'bg-emerald-50', text: 'text-emerald-700' },
-  'K3-KEPEMIMPINAN': { icon: Users2, bg: 'bg-sky-50', text: 'text-sky-700' },
-  'K3-DOKUMEN': { icon: FileText, bg: 'bg-slate-100', text: 'text-slate-700' },
-  'K3-LAPORAN': { icon: BarChart3, bg: 'bg-cyan-50', text: 'text-cyan-700' },
-  'K3-RISK-REGISTER': { icon: ExternalLink, bg: 'bg-teal-50', text: 'text-teal-700' },
+const MODULE_ICON_MAP: Record<
+  string,
+  {
+    icon: React.ComponentType<{ className?: string }>;
+    bg: string;
+    text: string;
+  }
+> = {
+  "K3-KESELAMATAN": { icon: Shield, bg: "bg-teal-50", text: "text-teal-700" },
+  "K3-B3": { icon: FlaskConical, bg: "bg-amber-50", text: "text-amber-700" },
+  "K3-KEBAKARAN": { icon: Flame, bg: "bg-rose-50", text: "text-rose-700" },
+  "K3-UTILITAS": { icon: Wrench, bg: "bg-blue-50", text: "text-blue-700" },
+  "K3-ALKES": {
+    icon: Stethoscope,
+    bg: "bg-indigo-50",
+    text: "text-indigo-700",
+  },
+  "K3-BENCANA": {
+    icon: AlertTriangle,
+    bg: "bg-orange-50",
+    text: "text-orange-700",
+  },
+  "K3-KESEHATAN-KERJA": {
+    icon: HeartPulse,
+    bg: "bg-red-50",
+    text: "text-red-700",
+  },
+  "K3-DIKLAT": {
+    icon: GraduationCap,
+    bg: "bg-emerald-50",
+    text: "text-emerald-700",
+  },
+  "K3-KEPEMIMPINAN": { icon: Users2, bg: "bg-sky-50", text: "text-sky-700" },
+  "K3-DOKUMEN": { icon: FileText, bg: "bg-slate-100", text: "text-slate-700" },
+  "K3-LAPORAN": { icon: BarChart3, bg: "bg-cyan-50", text: "text-cyan-700" },
+  "K3-RISK-REGISTER": {
+    icon: ExternalLink,
+    bg: "bg-teal-50",
+    text: "text-teal-700",
+  },
 };
 
 export const RingkasanView: React.FC = () => {
-  const {
-    stats,
-    moduleSummaries,
-    setActiveModuleId,
-  } = useK3();
+  const { stats, moduleSummaries, setActiveModuleId } = useK3();
 
-  const [searchModule, setSearchModule] = useState<string>('');
-  const [filterType, setFilterType] = useState<'all' | 'pending' | 'completed'>('all');
+  const [searchModule, setSearchModule] = useState<string>("");
+  const [filterType, setFilterType] = useState<"all" | "pending" | "completed">(
+    "all",
+  );
 
-  const allModuleCards = OFFICIAL_SIDEBAR_MENUS.filter((m) => m.id !== 'RINGKASAN');
+  const allModuleCards = OFFICIAL_SIDEBAR_MENUS.filter(
+    (m) => m.id !== "RINGKASAN",
+  );
 
   // Filter modules
   const filteredModules = allModuleCards.filter((menu) => {
     const summary = moduleSummaries.find((s) => s.moduleId === menu.id);
     const uploadedCount = summary?.uploadedCount || 0;
     const matchSearch =
-      searchModule === '' ||
+      searchModule === "" ||
       menu.name.toLowerCase().includes(searchModule.toLowerCase()) ||
       menu.checklistMapping.toLowerCase().includes(searchModule.toLowerCase());
 
     if (!matchSearch) return false;
 
-    if (filterType === 'pending') {
+    if (filterType === "pending") {
       return uploadedCount === 0;
     }
-    if (filterType === 'completed') {
+    if (filterType === "completed") {
       return uploadedCount > 0;
     }
     return true;
@@ -80,9 +107,6 @@ export const RingkasanView: React.FC = () => {
               DASHBOARD / OVERVIEW
             </p>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-            Ringkasan SMK3RS
-          </h1>
         </div>
 
         {/* Floating pill badge */}
@@ -104,7 +128,9 @@ export const RingkasanView: React.FC = () => {
         {/* Card 1: Total Persyaratan */}
         <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-2xs hover:shadow-xs hover:border-slate-300 transition-all flex flex-col justify-between">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-600">Total Persyaratan</span>
+            <span className="text-xs font-medium text-slate-600">
+              Total Persyaratan
+            </span>
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100">
               <Copy className="h-4 w-4" />
             </div>
@@ -113,14 +139,18 @@ export const RingkasanView: React.FC = () => {
             <div className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">
               {stats.totalItems}
             </div>
-            <p className="mt-1 text-xs text-slate-500">Persyaratan pada master checklist</p>
+            <p className="mt-1 text-xs text-slate-500">
+              Persyaratan pada master checklist
+            </p>
           </div>
         </div>
 
         {/* Card 2: Sudah Ada Dokumen */}
         <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-2xs hover:shadow-xs hover:border-emerald-300 transition-all flex flex-col justify-between">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-600">Sudah Ada Dokumen</span>
+            <span className="text-xs font-medium text-slate-600">
+              Sudah Ada Dokumen
+            </span>
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-100">
               <FileCheck2 className="h-4 w-4" />
             </div>
@@ -143,7 +173,9 @@ export const RingkasanView: React.FC = () => {
         {/* Card 3: Perlu Ditindaklanjuti */}
         <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-2xs hover:shadow-xs hover:border-amber-300 transition-all flex flex-col justify-between">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-600">Perlu Ditindaklanjuti</span>
+            <span className="text-xs font-medium text-slate-600">
+              Perlu Ditindaklanjuti
+            </span>
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-50 text-amber-600 border border-amber-100">
               <ShieldAlert className="h-4 w-4" />
             </div>
@@ -157,14 +189,18 @@ export const RingkasanView: React.FC = () => {
                 {stats.pendingPercentage}%
               </span>
             </div>
-            <p className="mt-1 text-xs text-slate-500">Kosong atau menunggu verifikasi</p>
+            <p className="mt-1 text-xs text-slate-500">
+              Kosong atau menunggu verifikasi
+            </p>
           </div>
         </div>
 
         {/* Card 4: Modul SMK3RS / MFK */}
         <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-2xs hover:shadow-xs hover:border-purple-300 transition-all flex flex-col justify-between">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-600">Modul SMK3RS / MFK</span>
+            <span className="text-xs font-medium text-slate-600">
+              Modul SMK3RS / MFK
+            </span>
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-purple-50 text-purple-600 border border-purple-100">
               <Clock className="h-4 w-4" />
             </div>
@@ -173,7 +209,9 @@ export const RingkasanView: React.FC = () => {
             <div className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">
               12
             </div>
-            <p className="mt-1 text-xs text-slate-500">Termasuk Risk Register / IBR</p>
+            <p className="mt-1 text-xs text-slate-500">
+              Termasuk Risk Register / IBR
+            </p>
           </div>
         </div>
       </div>
@@ -184,34 +222,50 @@ export const RingkasanView: React.FC = () => {
           {/* Quick filter pills */}
           <div className="flex items-center gap-1.5 overflow-x-auto text-xs font-medium">
             <button
-              onClick={() => setFilterType('all')}
+              onClick={() => setFilterType("all")}
               className={`px-3 py-1.5 rounded-xl transition-colors shrink-0 ${
-                filterType === 'all'
-                  ? 'bg-teal-600 text-white font-bold shadow-2xs'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                filterType === "all"
+                  ? "bg-teal-600 text-white font-bold shadow-2xs"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
               }`}
             >
               Semua Modul ({allModuleCards.length})
             </button>
             <button
-              onClick={() => setFilterType('pending')}
+              onClick={() => setFilterType("pending")}
               className={`px-3 py-1.5 rounded-xl transition-colors shrink-0 ${
-                filterType === 'pending'
-                  ? 'bg-amber-600 text-white font-bold shadow-2xs'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                filterType === "pending"
+                  ? "bg-amber-600 text-white font-bold shadow-2xs"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
               }`}
             >
-              Belum Lengkap ({allModuleCards.filter(m => (moduleSummaries.find(s => s.moduleId === m.id)?.uploadedCount || 0) === 0).length})
+              Belum Lengkap (
+              {
+                allModuleCards.filter(
+                  (m) =>
+                    (moduleSummaries.find((s) => s.moduleId === m.id)
+                      ?.uploadedCount || 0) === 0,
+                ).length
+              }
+              )
             </button>
             <button
-              onClick={() => setFilterType('completed')}
+              onClick={() => setFilterType("completed")}
               className={`px-3 py-1.5 rounded-xl transition-colors shrink-0 ${
-                filterType === 'completed'
-                  ? 'bg-emerald-600 text-white font-bold shadow-2xs'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                filterType === "completed"
+                  ? "bg-emerald-600 text-white font-bold shadow-2xs"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
               }`}
             >
-              Ada Berkas ({allModuleCards.filter(m => (moduleSummaries.find(s => s.moduleId === m.id)?.uploadedCount || 0) > 0).length})
+              Ada Berkas (
+              {
+                allModuleCards.filter(
+                  (m) =>
+                    (moduleSummaries.find((s) => s.moduleId === m.id)
+                      ?.uploadedCount || 0) > 0,
+                ).length
+              }
+              )
             </button>
           </div>
 
@@ -231,7 +285,9 @@ export const RingkasanView: React.FC = () => {
         {/* Module Cards List (Pixel match to Image 2 with elevated icons & typography) */}
         <div className="space-y-3.5">
           {filteredModules.map((menu) => {
-            const summary = moduleSummaries.find((s) => s.moduleId === menu.id) || {
+            const summary = moduleSummaries.find(
+              (s) => s.moduleId === menu.id,
+            ) || {
               moduleId: menu.id,
               moduleName: menu.name,
               totalItems: 0,
@@ -245,14 +301,14 @@ export const RingkasanView: React.FC = () => {
             const isExternal = Boolean(menu.externalUrl);
             const iconConfig = MODULE_ICON_MAP[menu.id] || {
               icon: Shield,
-              bg: 'bg-teal-50',
-              text: 'text-teal-700',
+              bg: "bg-teal-50",
+              text: "text-teal-700",
             };
             const Icon = iconConfig.icon;
 
             const handleClick = () => {
               if (isExternal && menu.externalUrl) {
-                window.open(menu.externalUrl, '_blank', 'noopener,noreferrer');
+                window.open(menu.externalUrl, "_blank", "noopener,noreferrer");
               } else {
                 setActiveModuleId(menu.id);
               }
@@ -315,7 +371,8 @@ export const RingkasanView: React.FC = () => {
 
           {filteredModules.length === 0 && (
             <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center text-xs text-slate-400">
-              Tidak ditemukan modul yang sesuai dengan pencarian "{searchModule}".
+              Tidak ditemukan modul yang sesuai dengan pencarian "{searchModule}
+              ".
             </div>
           )}
         </div>
