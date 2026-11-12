@@ -302,41 +302,14 @@ export const K3Provider: React.FC<{ children: React.ReactNode }> = ({ children }
             remoteMap.set(d.id, d.data() as MasterChecklistItem);
           });
 
-          // Check if local browser has documents that Firestore doesn't have yet (auto sync-up)
-          const itemsToSyncUp: MasterChecklistItem[] = [];
-
           // Maintain strict canonical order from INITIAL_MASTER_CHECKLIST
           const orderedItems = INITIAL_MASTER_CHECKLIST.map((initialItem) => {
             const remoteItem = remoteMap.get(initialItem.id);
-            const localSavedItem = items.find((i) => i.id === initialItem.id);
-
-            // If local item has uploaded documents and remote item has 0, keep local and sync to Firestore!
-            if (
-              localSavedItem &&
-              localSavedItem.documents &&
-              localSavedItem.documents.length > 0 &&
-              (!remoteItem || !remoteItem.documents || remoteItem.documents.length === 0)
-            ) {
-              itemsToSyncUp.push(localSavedItem);
-              return localSavedItem;
-            }
-
             return remoteItem || initialItem;
           });
 
           setItems(orderedItems);
           setIsCloudSynced(true);
-
-          // Auto-sync any local documents from prior sessions to cloud
-          if (itemsToSyncUp.length > 0) {
-            console.log(`Auto-syncing ${itemsToSyncUp.length} locally saved items with documents to cloud...`);
-            const batch = writeBatch(db);
-            itemsToSyncUp.forEach((item) => {
-              const itemRef = doc(db, 'checklist_items', item.id);
-              batch.set(itemRef, cleanForFirestore(item), { merge: true });
-            });
-            batch.commit().catch((err) => console.warn('Auto sync to Firestore error:', err));
-          }
 
           // Keep active modal item in sync if open
           setActiveDocModalItem((current) => {
@@ -775,8 +748,11 @@ export const K3Provider: React.FC<{ children: React.ReactNode }> = ({ children }
   };
 
   const deleteDocument = async (itemId: string, docId: string) => {
-    const targetItem = items.find((i) => i.id === itemId);
-    const targetDoc = targetItem?.documents.find((d) => d.id === docId);
+    const currentItem =
+      activeDocModalItem?.id === itemId
+        ? activeDocModalItem
+        : items.find((i) => i.id === itemId);
+    const targetDoc = currentItem?.documents.find((d) => d.id === docId);
 
     // Delete in Google Drive if ID can be found
     if (targetDoc?.isGDrive && targetDoc.gdriveUrl) {
@@ -798,11 +774,11 @@ export const K3Provider: React.FC<{ children: React.ReactNode }> = ({ children }
     }
 
     const nowStr = new Date().toISOString().split('T')[0];
-    const remainingDocs = (targetItem?.documents || []).filter(d => d.id !== docId);
+    const remainingDocs = (currentItem?.documents || []).filter((d) => d.id !== docId);
 
     // Optimistic local update
-    setItems(prevItems =>
-      prevItems.map(item => {
+    setItems((prevItems) =>
+      prevItems.map((item) => {
         if (item.id === itemId) {
           return {
             ...item,
@@ -815,7 +791,7 @@ export const K3Provider: React.FC<{ children: React.ReactNode }> = ({ children }
       })
     );
 
-    setActiveDocModalItem(prev => {
+    setActiveDocModalItem((prev) => {
       if (prev && prev.id === itemId) {
         return {
           ...prev,
@@ -826,12 +802,29 @@ export const K3Provider: React.FC<{ children: React.ReactNode }> = ({ children }
       return prev;
     });
 
+    // Update localStorage cache immediately
+    try {
+      const updatedList = items.map((it) =>
+        it.id === itemId
+          ? {
+              ...it,
+              documents: remainingDocs,
+              status: remainingDocs.length > 0 ? it.status : 'belum',
+              lastUpdated: nowStr,
+            }
+          : it
+      );
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedList));
+    } catch {
+      // ignore
+    }
+
     // Real-time Cloud update to Firestore -> Pushes deletion to all users instantly!
     try {
       const itemRef = doc(db, 'checklist_items', itemId);
       const payload = cleanForFirestore({
         documents: remainingDocs,
-        status: remainingDocs.length > 0 ? targetItem?.status || 'lengkap' : 'belum',
+        status: remainingDocs.length > 0 ? currentItem?.status || 'lengkap' : 'belum',
         lastUpdated: nowStr,
       });
       await setDoc(itemRef, payload, { merge: true });
