@@ -212,36 +212,25 @@ export const Sidebar: React.FC = () => {
         </div>
 
         {/* Footer Collapse Toggle */}
-        <div className="shrink-0 p-3.5 border-t border-slate-100 bg-white">
-          <div className="flex items-center justify-between">
-            {!isSidebarCollapsed ? (
-              <div className="flex flex-col text-[11px] text-slate-400 leading-tight">
-                <span className="font-semibold text-slate-600">
-                  Akreditasi KARS
-                </span>
-                <span className="text-teal-600 font-medium">
-                  Standar MFK & STARKES
-                </span>
-              </div>
-            ) : null}
-
-            <button
-              onClick={() => setIsSidebarCollapsed((prev) => !prev)}
-              className="hidden lg:flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"
-              title={
-                isSidebarCollapsed ? "Perluas Sidebar" : "Perkecil Sidebar"
-              }
-              aria-label={
-                isSidebarCollapsed ? "Perluas Sidebar" : "Perkecil Sidebar"
-              }
-            >
-              {isSidebarCollapsed ? (
-                <ChevronRight className="h-4 w-4" />
-              ) : (
-                <ChevronLeft className="h-4 w-4" />
-              )}
-            </button>
-          </div>
+        <div
+          className={`shrink-0 p-3 border-t border-slate-100 bg-white flex items-center ${
+            isSidebarCollapsed ? "justify-center" : "justify-end"
+          }`}
+        >
+          <button
+            onClick={() => setIsSidebarCollapsed((prev) => !prev)}
+            className="hidden lg:flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"
+            title={isSidebarCollapsed ? "Perluas Sidebar" : "Perkecil Sidebar"}
+            aria-label={
+              isSidebarCollapsed ? "Perluas Sidebar" : "Perkecil Sidebar"
+            }
+          >
+            {isSidebarCollapsed ? (
+              <ChevronRight className="h-4 w-4" />
+            ) : (
+              <ChevronLeft className="h-4 w-4" />
+            )}
+          </button>
         </div>
       </aside>
     </>
